@@ -886,8 +886,8 @@ async function exportVideo() {
             canvasWidth: videoCanvas.width,
             canvasHeight: videoCanvas.height,
             overlayRect: {
-                x: parseInt(document.getElementById('overlayContainer').style.left) || 0,
-                y: parseInt(document.getElementById('overlayContainer').style.top) || 0,
+                x: (parseInt(document.getElementById('overlayContainer').style.left) || 0) - 20,
+                y: (parseInt(document.getElementById('overlayContainer').style.top) || 0) - 20,
                 width: parseInt(document.getElementById('overlayContainer').style.width) || videoCanvas.width,
                 height: parseInt(document.getElementById('overlayContainer').style.height) || videoCanvas.height
             },
@@ -1027,8 +1027,8 @@ async function exportVideo() {
             canvasWidth: videoCanvas.width,
             canvasHeight: videoCanvas.height,
             overlayRect: {
-                x: parseInt(document.getElementById('overlayContainer').style.left) || 0,
-                y: parseInt(document.getElementById('overlayContainer').style.top) || 0,
+                x: (parseInt(document.getElementById('overlayContainer').style.left) || 0) - 20,
+                y: (parseInt(document.getElementById('overlayContainer').style.top) || 0) - 20,
                 width: parseInt(document.getElementById('overlayContainer').style.width) || videoCanvas.width,
                 height: parseInt(document.getElementById('overlayContainer').style.height) || videoCanvas.height
             },

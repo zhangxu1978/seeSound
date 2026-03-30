@@ -93,7 +93,7 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                  settings.resolution === '1080' ? 1080 :
                  settings.resolution === '720' ? 720 : 480;
     }
-    const fps = videoStream?.r_frame_rate ? eval(videoStream.r_frame_rate) : 30;
+    const fps = 30;
 
     console.log(`[${taskId}] 📐 视频尺寸: ${width}x${height}, 帧率: ${fps}`);
 
@@ -177,31 +177,28 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
 
                     const overlay = settings.overlayRect || { x: 0, y: 0, width, height };
                     
-                    // 计算导出时的缩放比例
-                    // scaleFactor = canvas像素尺寸 / CSS显示尺寸
-                    // 我们需要将CSS坐标转换为导出尺寸的坐标
-                    let scaleX, scaleY;
-                    if (settings.scaleFactor) {
-                        // 使用前端传入的缩放因子
-                        scaleX = width / (settings.canvasWidth || width);
-                        scaleY = height / (settings.canvasHeight || height);
-                    } else {
-                        scaleX = width / (videoStream?.width || width);
-                        scaleY = height / (videoStream?.height || height);
-                    }
+                    // 计算导出时的坐标转换
+                    // overlay 是 CSS 像素坐标，需要转换为导出尺寸坐标
+                    // scaleFactor = videoCanvas像素 / CSS显示像素
+                    // 然后如果导出尺寸与 videoCanvas 尺寸不同，需要额外缩放
+                    const scaleFactor = settings.scaleFactor || 1;
+                    const canvasW = settings.canvasWidth || width;
+                    const canvasH = settings.canvasHeight || height;
+                    const exportScaleX = width / canvasW;
+                    const exportScaleY = height / canvasH;
                     
                     // 只在第一帧输出调试信息
                     if (frameIndex === 0) {
-                        console.log(`[${taskId}] 🔧 叠加层设置: x=${overlay.x}, y=${overlay.y}, w=${overlay.width}, h=${overlay.height}`);
-                        console.log(`[${taskId}] 🔧 canvas尺寸: ${settings.canvasWidth}x${settings.canvasHeight}, 导出尺寸: ${width}x${height}`);
-                        console.log(`[${taskId}] 🔧 缩放比例: scaleX=${scaleX}, scaleY=${scaleY}`);
+                        console.log(`[${taskId}] 🔧 叠加层设置(CSS): x=${overlay.x}, y=${overlay.y}, w=${overlay.width}, h=${overlay.height}`);
+                        console.log(`[${taskId}] 🔧 videoCanvas尺寸: ${canvasW}x${canvasH}, 导出尺寸: ${width}x${height}`);
+                        console.log(`[${taskId}] 🔧 scaleFactor=${scaleFactor}, exportScale=${exportScaleX}x${exportScaleY}`);
                     }
                     
-                    // 计算特效区域（相对于整个画布）
-                    const overlayX = overlay.x * scaleX;
-                    const overlayY = overlay.y * scaleY;
-                    const overlayW = overlay.width * scaleX;
-                    const overlayH = overlay.height * scaleY;
+                    // CSS像素 -> videoCanvas像素 -> 导出尺寸像素
+                    const overlayX = overlay.x * scaleFactor * exportScaleX;
+                    const overlayY = overlay.y * scaleFactor * exportScaleY;
+                    const overlayW = overlay.width * scaleFactor * exportScaleX;
+                    const overlayH = overlay.height * scaleFactor * exportScaleY;
 
                     // 保存上下文并裁剪到叠加层区域
                     ctx.save();
