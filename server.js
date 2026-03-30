@@ -116,13 +116,23 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
     task.metadata = { width, height, fps, duration: analyzer.duration, totalFrames };
     console.log(`[${taskId}] 🖼️ 待生成帧数: ${totalFrames}`);
 
-    // 初始化粒子
+    // 计算特效区域大小用于粒子初始化
+    const overlay = settings.overlayRect || { x: 0, y: 0, width, height };
+    const scaleFactor = settings.scaleFactor || 1;
+    const canvasW = settings.canvasWidth || width;
+    const canvasH = settings.canvasHeight || height;
+    const exportScaleX = width / canvasW;
+    const exportScaleY = height / canvasH;
+    const effectWidth = overlay.width * scaleFactor * exportScaleX;
+    const effectHeight = overlay.height * scaleFactor * exportScaleY;
+
+    // 初始化粒子 - 使用特效区域大小
     const particles = [];
     const particleCount = settings.particleCount || 150;
     for (let i = 0; i < particleCount; i++) {
         particles.push({
-            x: Math.random() * width,
-            y: Math.random() * height,
+            x: Math.random() * effectWidth,
+            y: Math.random() * effectHeight,
             vx: (Math.random() - 0.5) * 2,
             vy: (Math.random() - 0.5) * 2,
             size: Math.random() * 3 + 1,
@@ -130,6 +140,7 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
             maxLife: 0.5 + Math.random() * 0.5
         });
     }
+    console.log(`[${taskId}] 🔧 粒子初始化: effectWidth=${effectWidth.toFixed(0)}, effectHeight=${effectHeight.toFixed(0)}`);
 
     // 流式处理：逐帧生成，不缓存所有帧数据
     const batchSize = 10; // 减小批次大小
@@ -140,10 +151,6 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                 // 为每批创建新的 canvas
                 const canvas = createCanvas(width, height);
                 const ctx = canvas.getContext('2d');
-                
-                // 关键：确保画布背景透明
-                ctx.fillStyle = 'rgba(0, 0, 0, 0)';
-                ctx.fillRect(0, 0, width, height);
 
                 const endIdx = Math.min(startIdx + batchSize, totalFrames);
                 
@@ -172,8 +179,8 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                         console.log(`[${taskId}] 🎨 spectrum长度: ${energy.spectrum.length}, 最大值: ${Math.max(...energy.spectrum)}, 最小值: ${Math.min(...energy.spectrum)}`);
                     }
 
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0)';
-                    ctx.fillRect(0, 0, width, height);
+                    // 正确清除画布
+                    ctx.clearRect(0, 0, width, height);
 
                     const overlay = settings.overlayRect || { x: 0, y: 0, width, height };
                     
@@ -353,8 +360,6 @@ function roundRect(ctx, x, y, w, h, r) {
 
 // 粒子效果
 function drawParticles(ctx, x, y, w, h, energy, time, theme, particles, settings) {
-    const centerX = x + w / 2;
-    const centerY = y + h / 2;
     const sensitivity = settings.sensitivity || 1;
     
     particles.forEach((p, i) => {
@@ -371,8 +376,8 @@ function drawParticles(ctx, x, y, w, h, energy, time, theme, particles, settings
             p.y = Math.max(0, Math.min(h, p.y));
         }
 
-        const dx = centerX - (x + p.x);
-        const dy = centerY - (y + p.y);
+        const dx = w / 2 - p.x;
+        const dy = h / 2 - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         
         if (dist > 0) {
@@ -389,6 +394,8 @@ function drawParticles(ctx, x, y, w, h, energy, time, theme, particles, settings
         ctx.fill();
     });
 
+    const centerX = x + w / 2;
+    const centerY = y + h / 2;
     const pulseSize = Math.min(w, h) * 0.1 + energy.bass * Math.min(w, h) * 0.2 * sensitivity;
     const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, pulseSize);
     gradient.addColorStop(0, `hsla(${theme.hue}, ${theme.sat}%, ${theme.light}%, ${energy.bass * 0.5})`);
