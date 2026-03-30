@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音视频可视化编辑器 - 高级版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0d0d1a;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* 左侧预览区 */
+        .preview-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #08080f;
+            position: relative;
+        }
+
+        .preview-header {
+            padding: 12px 20px;
+            background: #121225;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #1e1e3a;
+        }
+
+        .preview-header h2 {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .preview-canvas-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #videoCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 视频/动画叠加层 */
+        .overlay-container {
+            position: absolute;
+            border: 2px dashed #667eea;
+            cursor: move;
+            resize: both;
+            overflow: hidden;
+            min-width: 100px;
+            min-height: 100px;
+        }
+
+        .overlay-container.resizing {
+            border-color: #f5576c;
+        }
+
+        .overlay-container .resize-handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #667eea;
+            border-radius: 50%;
+            bottom: -6px;
+            right: -6px;
+            cursor: nwse-resize;
+        }
+
+        #effectCanvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 播放控制栏 */
+        .playback-controls {
+            padding: 12px 20px;
+            background: #121225;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border-top: 1px solid #1e1e3a;
+        }
+
+        .control-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .control-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .time-display {
+            font-family: monospace;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            min-width: 90px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 2px;
+            width: 0%;
+        }
+
+        /* 右侧面板 */
+        .sidebar {
+            width: 380px;
+            background: #121225;
+            border-left: 1px solid #1e1e3a;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .panel-section {
+            padding: 16px;
+            border-bottom: 1px solid #1e1e3a;
+        }
+
+        .panel-section h3 {
+            font-size: 12px;
+            margin-bottom: 12px;
+            color: rgba(255, 255, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 设置行 */
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .setting-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .setting-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        select, input[type="number"] {
+            background: #0d0d1a;
+            border: 1px solid #2a2a4a;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            min-width: 100px;
+        }
+
+        input[type="number"] {
+            width: 60px;
+        }
+
+        input[type="range"] {
+            width: 80px;
+            height: 4px;
+            -webkit-appearance: none;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 2px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #667eea;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .value-display {
+            font-size: 11px;
+            color: #667eea;
+            min-width: 30px;
+            text-align: right;
+        }
+
+        /* 分组标题 */
+        .group-title {
+            font-size: 11px;
+            color: #667eea;
+            margin: 12px 0 8px 0;
+            padding-top: 8px;
+            border-top: 1px solid #2a2a4a;
+        }
+
+        /* 位置预设 */
+        .position-presets {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .preset-btn {
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #2a2a4a;
+            color: rgba(255, 255, 255, 0.6);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.3s;
+        }
+
+        .preset-btn:hover, .preset-btn.active {
+            background: rgba(102, 126, 234, 0.3);
+            border-color: #667eea;
+            color: #fff;
+        }
+
+        /* 导出按钮 */
+        .export-section {
+            padding: 16px;
+            margin-top: auto;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #333;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* 导出进度 */
+        .export-progress {
+            display: none;
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+        }
+
+        .export-progress.active {
+            display: block;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .progress-bar-container {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        /* 颜色选择器 */
+        .color-picker {
+            display: flex;
+            gap: 6px;
+        }
+
+        .color-option {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .color-option:hover, .color-option.active {
+            border-color: #fff;
+            transform: scale(1.1);
+        }
+
+        /* 文件上传 */
+        .file-upload {
+            border: 2px dashed rgba(102, 126, 234, 0.4);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-upload:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .file-upload input {
+            display: none;
+        }
+
+        .file-upload-text {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .file-info {
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            font-size: 11px;
+        }
+
+        /* 复选框 */
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .checkbox-label input {
+            width: 16px;
+            height: 16px;
+            accent-color: #667eea;
+        }
+
+        /* 变形预设 */
+        .transform-presets {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .transform-btn {
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #2a2a4a;
+            color: rgba(255, 255, 255, 0.6);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.3s;
+        }
+
+        .transform-btn:hover, .transform-btn.active {
+            background: rgba(102, 126, 234, 0.3);
+            border-color: #667eea;
+            color: #fff;
+        }
+
+        .hidden-video {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 左侧预览区 -->
+        <div class="preview-area">
+            <div class="preview-header">
+                <h2>🎬 预览</h2>
+                <span style="font-size: 11px; color: rgba(255,255,255,0.4);">拖拽调整位置，右下角调整大小</span>
+            </div>
+            
+            <div class="preview-canvas-container" id="previewContainer">
+                <canvas id="videoCanvas"></canvas>
+                <div class="overlay-container" id="overlayContainer" style="display: none;">
+                    <canvas id="effectCanvas"></canvas>
+                    <div class="resize-handle"></div>
+                </div>
+            </div>
+
+            <div class="playback-controls">
+                <button class="control-btn" id="playBtn">▶</button>
+                <span class="time-display" id="timeDisplay">00:00 / 00:00</span>
+                <div class="progress-bar" id="progressBar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧面板 -->
+        <div class="sidebar">
+            <!-- 文件上传 -->
+            <div class="panel-section">
+                <h3>📁 媒体文件</h3>
+                <div class="file-upload" id="fileUpload">
+                    <input type="file" id="mediaFile" accept="audio/*,video/*">
+                    <div class="file-upload-text">点击上传音频/视频文件</div>
+                </div>
+                <div class="file-info" id="fileInfo" style="display: none;">
+                    <div id="filename" style="color: #fff; margin-bottom: 4px;"></div>
+                    <div id="fileDetails" style="color: rgba(255,255,255,0.5);"></div>
+                </div>
+
+                <div class="group-title">背景图片（可选）</div>
+                <div class="file-upload" id="bgUpload">
+                    <input type="file" id="bgImageFile" accept="image/*">
+                    <div class="file-upload-text">点击上传背景图片</div>
+                </div>
+                <div class="file-info" id="bgFileInfo" style="display: none;">
+                    <div id="bgFilename" style="color: #fff; margin-bottom: 4px;"></div>
+                    <div id="bgFileDetails" style="color: rgba(255,255,255,0.5);"></div>
+                    <button class="btn-secondary" id="removeBgBtn" style="margin-top: 8px; font-size: 11px; padding: 4px 8px;">移除背景图</button>
+                </div>
+                <div style="font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 8px;">
+                    💡 上传背景图后，将使用背景图替代视频画面输出
+                </div>
+            </div>
+
+            <!-- 动画效果 -->
+            <div class="panel-section">
+                <h3>🎨 动画效果</h3>
+                <div class="setting-row">
+                    <span class="setting-label">效果类型</span>
+                    <select id="effectType">
+                        <option value="particles">粒子流动</option>
+                        <option value="particles-up">粒子上升</option>
+                        <option value="spectrum">频谱柱状</option>
+                        <option value="wave">波形线条</option>
+                        <option value="circular">环形频谱</option>
+                    </select>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">颜色主题</span>
+                    <div class="color-picker">
+                        <div class="color-option active" style="background: linear-gradient(135deg, #667eea, #764ba2)" data-colors="purple"></div>
+                        <div class="color-option" style="background: linear-gradient(135deg, #f093fb, #f5576c)" data-colors="pink"></div>
+                        <div class="color-option" style="background: linear-gradient(135deg, #4facfe, #00f2fe)" data-colors="blue"></div>
+                        <div class="color-option" style="background: linear-gradient(135deg, #43e97b, #38f9d7)" data-colors="green"></div>
+                        <div class="color-option" style="background: linear-gradient(135deg, #fa709a, #fee140)" data-colors="warm"></div>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">灵敏度</span>
+                    <div class="setting-control">
+                        <input type="range" id="sensitivity" min="0.5" max="3" step="0.1" value="1">
+                        <span class="value-display" id="sensitivityValue">1.0</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">透明度</span>
+                    <div class="setting-control">
+                        <input type="range" id="opacity" min="0.1" max="1" step="0.1" value="0.9">
+                        <span class="value-display" id="opacityValue">0.9</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 柱状图设置 -->
+            <div class="panel-section" id="spectrumSettings">
+                <h3>📊 柱状图设置</h3>
+                
+                <div class="group-title">方向与布局</div>
+                <div class="setting-row">
+                    <span class="setting-label">柱状方向</span>
+                    <select id="barDirection">
+                        <option value="up">向上</option>
+                        <option value="down">向下</option>
+                        <option value="left">向左</option>
+                        <option value="right">向右</option>
+                        <option value="center">向中心</option>
+                    </select>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">柱状数量</span>
+                    <div class="setting-control">
+                        <input type="range" id="barCount" min="16" max="128" step="8" value="64">
+                        <span class="value-display" id="barCountValue">64</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">柱状宽度</span>
+                    <div class="setting-control">
+                        <input type="range" id="barWidth" min="2" max="20" step="1" value="8">
+                        <span class="value-display" id="barWidthValue">8</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">间距比例</span>
+                    <div class="setting-control">
+                        <input type="range" id="barGap" min="0" max="1" step="0.1" value="0.2">
+                        <span class="value-display" id="barGapValue">0.2</span>
+                    </div>
+                </div>
+
+                <div class="group-title">样式</div>
+                <div class="setting-row">
+                    <span class="setting-label">圆角大小</span>
+                    <div class="setting-control">
+                        <input type="range" id="barRadius" min="0" max="10" step="1" value="4">
+                        <span class="value-display" id="barRadiusValue">4</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">镜像效果</span>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="mirrorEffect" checked>
+                        启用
+                    </label>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">渐变方向</span>
+                    <select id="gradientDirection">
+                        <option value="vertical">垂直渐变</option>
+                        <option value="horizontal">水平渐变</option>
+                        <option value="radial">径向渐变</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 波形设置 -->
+            <div class="panel-section" id="waveSettings">
+                <h3>〰️ 波形设置</h3>
+
+                <div class="group-title">起始位置</div>
+                <div class="setting-row">
+                    <span class="setting-label">波形起点</span>
+                    <select id="waveOrigin">
+                        <option value="center">从中间</option>
+                        <option value="left">从左侧</option>
+                        <option value="right">从右侧</option>
+                        <option value="top">从顶部</option>
+                        <option value="bottom">从底部</option>
+                    </select>
+                </div>
+
+                <div class="group-title">波形参数</div>
+                <div class="setting-row">
+                    <span class="setting-label">振幅强度</span>
+                    <div class="setting-control">
+                        <input type="range" id="amplitude" min="0.1" max="3" step="0.1" value="1">
+                        <span class="value-display" id="amplitudeValue">1.0</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">频率密度</span>
+                    <div class="setting-control">
+                        <input type="range" id="frequency" min="0.5" max="5" step="0.5" value="2">
+                        <span class="value-display" id="frequencyValue">2.0</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">线条粗细</span>
+                    <div class="setting-control">
+                        <input type="range" id="lineWidth" min="1" max="10" step="0.5" value="3">
+                        <span class="value-display" id="lineWidthValue">3.0</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">线条数量</span>
+                    <div class="setting-control">
+                        <input type="range" id="waveLines" min="1" max="5" step="1" value="1">
+                        <span class="value-display" id="waveLinesValue">1</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">发光效果</span>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="glowEffect" checked>
+                        启用
+                    </label>
+                </div>
+            </div>
+
+            <!-- 画布变形 -->
+            <div class="panel-section">
+                <h3>🌀 画布变形</h3>
+
+                <div class="setting-row">
+                    <span class="setting-label">变形类型</span>
+                    <select id="transformType">
+                        <option value="none">无变形</option>
+                        <option value="wave">波浪扭曲</option>
+                        <option value="spiral">螺旋扭曲</option>
+                        <option value="bulge">凸透镜</option>
+                        <option value="pinch">凹透镜</option>
+                        <option value="swirl">漩涡</option>
+                        <option value="ripple">水波纹</option>
+                    </select>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">变形强度</span>
+                    <div class="setting-control">
+                        <input type="range" id="transformIntensity" min="0" max="100" step="5" value="30">
+                        <span class="value-display" id="transformIntensityValue">30</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">动画速度</span>
+                    <div class="setting-control">
+                        <input type="range" id="transformSpeed" min="0" max="5" step="0.5" value="1">
+                        <span class="value-display" id="transformSpeedValue">1.0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 位置设置 -->
+            <div class="panel-section">
+                <h3>📍 位置预设</h3>
+                <div class="position-presets">
+                    <button class="preset-btn active" data-position="fullscreen">全屏</button>
+                    <button class="preset-btn" data-position="bottom">底部</button>
+                    <button class="preset-btn" data-position="top">顶部</button>
+                    <button class="preset-btn" data-position="center">居中</button>
+                    <button class="preset-btn" data-position="left">左侧</button>
+                    <button class="preset-btn" data-position="right">右侧</button>
+                </div>
+            </div>
+
+            <!-- 导出设置 -->
+            <div class="panel-section">
+                <h3>⚙️ 导出设置</h3>
+                <div class="setting-row">
+                    <span class="setting-label">分辨率</span>
+                    <select id="resolution">
+                        <option value="original">原始分辨率</option>
+                        <option value="1080">1920x1080</option>
+                        <option value="720">1280x720</option>
+                        <option value="480">854x480</option>
+                    </select>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">视频质量</span>
+                    <select id="quality">
+                        <option value="high">高</option>
+                        <option value="medium">中</option>
+                        <option value="low">低</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 导出按钮 -->
+            <div class="export-section">
+                <button class="btn-primary" id="exportBtn" disabled>
+                    🎬 导出视频
+                </button>
+                <div class="export-progress" id="exportProgress">
+                    <div class="progress-text" id="progressText">准备导出...</div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" id="exportProgressBar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <video id="videoElement" class="hidden-video" crossorigin="anonymous"></video>
+    <audio id="audioElement" class="hidden-video" crossorigin="anonymous"></audio>
+
+    <script src="app.js"></script>
+</body>
+</html>
