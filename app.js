@@ -230,11 +230,29 @@ function handleFileSelect(e) {
 }
 
 // 连接音频源
+let connectedElements = new WeakSet();
+
 function connectAudioSource(element) {
-    if (source) source.disconnect();
-    source = audioContext.createMediaElementSource(element);
-    source.connect(analyser);
-    analyser.connect(audioContext.destination);
+    if (connectedElements.has(element)) {
+        return;
+    }
+    
+    if (source) {
+        try {
+            source.disconnect();
+        } catch (e) {
+            console.warn('断开音频源失败:', e);
+        }
+    }
+    
+    try {
+        source = audioContext.createMediaElementSource(element);
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+        connectedElements.add(element);
+    } catch (e) {
+        console.error('创建音频源失败:', e);
+    }
 }
 
 // 设置画布大小
@@ -865,12 +883,15 @@ async function exportVideo() {
             ...effectSettings,
             resolution: document.getElementById('resolution').value,
             quality: document.getElementById('quality').value,
+            canvasWidth: videoCanvas.width,
+            canvasHeight: videoCanvas.height,
             overlayRect: {
                 x: parseInt(document.getElementById('overlayContainer').style.left) || 0,
                 y: parseInt(document.getElementById('overlayContainer').style.top) || 0,
                 width: parseInt(document.getElementById('overlayContainer').style.width) || videoCanvas.width,
                 height: parseInt(document.getElementById('overlayContainer').style.height) || videoCanvas.height
-            }
+            },
+            scaleFactor: videoCanvas.width / parseInt(videoCanvas.style.width || videoCanvas.width)
         };
 
         const formData = new FormData();
@@ -1003,12 +1024,15 @@ async function exportVideo() {
             ...effectSettings,
             resolution: document.getElementById('resolution').value,
             quality: document.getElementById('quality').value,
+            canvasWidth: videoCanvas.width,
+            canvasHeight: videoCanvas.height,
             overlayRect: {
                 x: parseInt(document.getElementById('overlayContainer').style.left) || 0,
                 y: parseInt(document.getElementById('overlayContainer').style.top) || 0,
                 width: parseInt(document.getElementById('overlayContainer').style.width) || videoCanvas.width,
                 height: parseInt(document.getElementById('overlayContainer').style.height) || videoCanvas.height
             },
+            scaleFactor: videoCanvas.width / parseInt(videoCanvas.style.width || videoCanvas.width),
             useBgImage: useBgImage,
             bgImageWidth: bgImage ? bgImage.width : null,
             bgImageHeight: bgImage ? bgImage.height : null

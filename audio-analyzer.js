@@ -88,16 +88,10 @@ class AudioAnalyzer {
         const startIndex = Math.max(0, sampleIndex - fftSize / 2);
         const endIndex = Math.min(this.audioData.samples.length, startIndex + fftSize);
 
-        // 提取样本窗口
         const window = this.audioData.samples.slice(startIndex, endIndex);
-        
-        // 应用汉宁窗
         const windowed = this.applyHannWindow(window, fftSize);
-        
-        // 执行 FFT
         const spectrum = this.fft(windowed);
         
-        // 计算各频段能量
         return this.calculateEnergy(spectrum);
     }
 
@@ -122,9 +116,17 @@ class AudioAnalyzer {
      */
     fft(samples) {
         const n = samples.length;
-        if (n <= 1) return samples;
+        
+        // 基例：返回带 real/imag/magnitude 的对象
+        if (n <= 1) {
+            const val = samples[0];
+            if (typeof val === 'number') {
+                return [{ real: val, imag: 0, magnitude: Math.abs(val) }];
+            }
+            return samples;
+        }
 
-        //  Cooley-Tukey FFT 算法
+        // Cooley-Tukey FFT 算法
         const even = [];
         const odd = [];
         for (let i = 0; i < n; i++) {
@@ -143,14 +145,14 @@ class AudioAnalyzer {
                 imag: Math.sin(angle)
             };
             
-            const oddReal = oddFFT[k] ? oddFFT[k].real || oddFFT[k] : 0;
-            const oddImag = oddFFT[k] ? oddFFT[k].imag || 0 : 0;
+            const oddReal = oddFFT[k] ? (oddFFT[k].real !== undefined ? oddFFT[k].real : oddFFT[k]) : 0;
+            const oddImag = oddFFT[k] ? (oddFFT[k].imag !== undefined ? oddFFT[k].imag : 0) : 0;
             
             const tReal = twiddle.real * oddReal - twiddle.imag * oddImag;
             const tImag = twiddle.real * oddImag + twiddle.imag * oddReal;
 
-            const evenReal = evenFFT[k] ? evenFFT[k].real || evenFFT[k] : 0;
-            const evenImag = evenFFT[k] ? evenFFT[k].imag || 0 : 0;
+            const evenReal = evenFFT[k] ? (evenFFT[k].real !== undefined ? evenFFT[k].real : evenFFT[k]) : 0;
+            const evenImag = evenFFT[k] ? (evenFFT[k].imag !== undefined ? evenFFT[k].imag : 0) : 0;
 
             result[k] = {
                 real: evenReal + tReal,
@@ -175,9 +177,12 @@ class AudioAnalyzer {
         const midEnd = Math.floor(spectrum.length * 0.5);
 
         let bass = 0, mid = 0, treble = 0, total = 0;
+        const magnitudes = [];
 
         for (let i = 0; i < spectrum.length; i++) {
             const mag = spectrum[i].magnitude || spectrum[i];
+            magnitudes.push(mag);
+            
             const normalized = mag / spectrum.length;
             
             if (i < bassEnd) bass += normalized;
@@ -187,13 +192,18 @@ class AudioAnalyzer {
             total += normalized;
         }
 
-        // 归一化
-        bass = Math.min(1, bass / bassEnd * 4);
-        mid = Math.min(1, mid / (midEnd - bassEnd) * 4);
-        treble = Math.min(1, treble / (spectrum.length - midEnd) * 4);
-        const average = Math.min(1, total / spectrum.length * 4);
+        const maxMag = Math.max(...magnitudes, 1);
+        const spectrumValues = magnitudes.map(mag => 
+            Math.min(255, Math.floor((mag / maxMag) * 255))
+        );
 
-        return { bass, mid, treble, average, spectrum };
+        const amplify = 50;
+        bass = Math.min(1, bass / bassEnd * amplify);
+        mid = Math.min(1, mid / (midEnd - bassEnd) * amplify);
+        treble = Math.min(1, treble / (spectrum.length - midEnd) * amplify);
+        const average = Math.min(1, total / spectrum.length * amplify);
+
+        return { bass, mid, treble, average, spectrum: spectrumValues };
     }
 
     /**
@@ -201,12 +211,20 @@ class AudioAnalyzer {
      */
     getMockSpectrum(time) {
         const beat = Math.sin(time * 10) * 0.5 + 0.5;
+        const spectrum = [];
+        for (let i = 0; i < 64; i++) {
+            const freq = (i / 64);
+            const value = (Math.sin(time * 5 + i * 0.3) * 0.5 + 0.5) * 
+                          (Math.sin(time * 10 + freq * 10) * 0.3 + 0.7) * 
+                          (1 - freq * 0.5) * beat;
+            spectrum.push(Math.floor(value * 255));
+        }
         return {
             bass: beat * 0.8,
             mid: Math.sin(time * 15) * 0.3 + 0.3,
             treble: Math.sin(time * 25) * 0.2 + 0.2,
             average: beat * 0.5,
-            spectrum: []
+            spectrum
         };
     }
 
@@ -230,14 +248,39 @@ class AudioAnalyzer {
         for (let i = 0; i < totalFrames; i++) {
             const time = i / fps;
             const energy = this.getSpectrumAtTime(time);
+            // 只存储必要的数据，减少内存占用
             frameData.push({
                 frame: i,
                 time,
-                ...energy
+                bass: energy.bass,
+                mid: energy.mid,
+                treble: energy.treble,
+                average: energy.average,
+                spectrum: energy.spectrum ? energy.spectrum.slice(0, 128) : new Array(128).fill(128) // 限制频谱数据长度
             });
         }
 
         return frameData;
+    }
+
+    /**
+     * 获取指定帧的频谱数据（用于流式处理）
+     * @param {number} frameIndex - 帧索引
+     * @param {number} fps - 帧率
+     * @returns {Object} - 频谱能量数据
+     */
+    getFrameData(frameIndex, fps = 30) {
+        const time = frameIndex / fps;
+        const energy = this.getSpectrumAtTime(time);
+        return {
+            frame: frameIndex,
+            time,
+            bass: energy.bass,
+            mid: energy.mid,
+            treble: energy.treble,
+            average: energy.average,
+            spectrum: energy.spectrum ? energy.spectrum.slice(0, 128) : new Array(128).fill(128)
+        };
     }
 }
 

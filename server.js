@@ -64,10 +64,12 @@ const colorThemes = {
     warm: { hue: 30, sat: 90, light: 60 }
 };
 
-// 生成可视化帧 - 优化内存使用版本
+// 生成可视化帧 - 流式处理版本，最小化内存使用
 async function generateVisualizationFrames(inputPath, settings, taskId, outputDir) {
     const framesDir = path.join(outputDir, 'frames');
     fs.mkdirSync(framesDir, { recursive: true });
+
+    console.log(`[${taskId}] 🔍 获取视频元数据...`);
 
     // 获取视频信息
     const metadata = await new Promise((resolve, reject) => {
@@ -79,23 +81,40 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
 
     const videoStream = metadata.streams.find(s => s.codec_type === 'video');
     
-    const width = settings.resolution === 'original' ? videoStream?.width || 1280 : 
-                  settings.resolution === '1080' ? 1920 :
-                  settings.resolution === '720' ? 1280 : 854;
-    const height = settings.resolution === 'original' ? videoStream?.height || 720 :
-                   settings.resolution === '1080' ? 1080 :
-                   settings.resolution === '720' ? 720 : 480;
+    let width, height;
+    if (settings.useBgImage && settings.bgImageWidth && settings.bgImageHeight) {
+        width = settings.bgImageWidth;
+        height = settings.bgImageHeight;
+    } else {
+        width = settings.resolution === 'original' ? videoStream?.width || 1280 : 
+                settings.resolution === '1080' ? 1920 :
+                settings.resolution === '720' ? 1280 : 854;
+        height = settings.resolution === 'original' ? videoStream?.height || 720 :
+                 settings.resolution === '1080' ? 1080 :
+                 settings.resolution === '720' ? 720 : 480;
+    }
     const fps = videoStream?.r_frame_rate ? eval(videoStream.r_frame_rate) : 30;
 
-    // 分析音频数据
+    console.log(`[${taskId}] 📐 视频尺寸: ${width}x${height}, 帧率: ${fps}`);
+
+    // 分析音频数据 - 流式处理
     const task = exportTasks.get(taskId);
     task.message = '正在分析音频...';
     
     const analyzer = new AudioAnalyzer();
-    const frameData = await analyzer.analyzeFullAudio(inputPath, fps);
-    const totalFrames = frameData.length;
-
+    console.log(`[${taskId}] 🎵 提取音频数据...`);
+    // 只提取音频数据，不预计算所有帧
+    try {
+        await analyzer.extractAudioData(inputPath);
+        console.log(`[${taskId}] ✅ 音频提取完成，时长: ${analyzer.duration.toFixed(2)}秒`);
+    } catch (err) {
+        console.warn(`[${taskId}] ⚠️ 音频提取失败，使用模拟数据:`, err.message);
+        analyzer.duration = 60;
+    }
+    
+    const totalFrames = Math.floor(analyzer.duration * fps);
     task.metadata = { width, height, fps, duration: analyzer.duration, totalFrames };
+    console.log(`[${taskId}] 🖼️ 待生成帧数: ${totalFrames}`);
 
     // 初始化粒子
     const particles = [];
@@ -112,14 +131,13 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
         });
     }
 
-    // 使用流式写入避免内存溢出
-    // 批量处理，每批处理完后强制垃圾回收
-    const batchSize = 30; // 每批处理的帧数
+    // 流式处理：逐帧生成，不缓存所有帧数据
+    const batchSize = 10; // 减小批次大小
     
     return new Promise((resolve, reject) => {
         const processBatch = async (startIdx) => {
             try {
-                // 为每批创建新的 canvas，处理完后释放
+                // 为每批创建新的 canvas
                 const canvas = createCanvas(width, height);
                 const ctx = canvas.getContext('2d');
                 
@@ -130,28 +148,58 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                 const endIdx = Math.min(startIdx + batchSize, totalFrames);
                 
                 for (let frameIndex = startIdx; frameIndex < endIdx; frameIndex++) {
-                    const frameInfo = frameData[frameIndex];
-                    const time = frameInfo.time;
+                    const time = frameIndex / fps;
+                    const frameEnergy = analyzer.getSpectrumAtTime(time);
+                    
+                    const sensitivity = settings.sensitivity || settings.sensitivvity || 1;
+                    
+                    const spectrumData = frameEnergy.spectrum && frameEnergy.spectrum.length > 0 
+                        ? frameEnergy.spectrum.slice(0, 64) 
+                        : new Array(64).fill(128);
+                    
                     const energy = {
-                        bass: frameInfo.bass * settings.sensitivity,
-                        mid: frameInfo.mid * settings.sensitivity,
-                        treble: frameInfo.treble * settings.sensitivity,
-                        average: frameInfo.average * settings.sensitivity,
-                        spectrum: frameInfo.spectrum || new Array(128).fill(128)
+                        bass: frameEnergy.bass * sensitivity,
+                        mid: frameEnergy.mid * sensitivity,
+                        treble: frameEnergy.treble * sensitivity,
+                        average: frameEnergy.average * sensitivity,
+                        spectrum: spectrumData
                     };
+                    
+                    // 第一帧输出能量值用于调试
+                    if (frameIndex === 0) {
+                        console.log(`[${taskId}] 🎨 能量数据: bass=${energy.bass.toFixed(2)}, mid=${energy.mid.toFixed(2)}, treble=${energy.treble.toFixed(2)}`);
+                        console.log(`[${taskId}] 🎨 spectrum前10个值: [${energy.spectrum.slice(0, 10).map(v => v.toFixed(0)).join(', ')}]`);
+                        console.log(`[${taskId}] 🎨 spectrum长度: ${energy.spectrum.length}, 最大值: ${Math.max(...energy.spectrum)}, 最小值: ${Math.min(...energy.spectrum)}`);
+                    }
 
-                    // 清空画布 - 使用透明背景
                     ctx.fillStyle = 'rgba(0, 0, 0, 0)';
                     ctx.fillRect(0, 0, width, height);
 
-                    // 获取叠加层位置
                     const overlay = settings.overlayRect || { x: 0, y: 0, width, height };
-                    const scaleX = width / (videoStream?.width || width);
-                    const scaleY = height / (videoStream?.height || height);
+                    
+                    // 计算导出时的缩放比例
+                    // scaleFactor = canvas像素尺寸 / CSS显示尺寸
+                    // 我们需要将CSS坐标转换为导出尺寸的坐标
+                    let scaleX, scaleY;
+                    if (settings.scaleFactor) {
+                        // 使用前端传入的缩放因子
+                        scaleX = width / (settings.canvasWidth || width);
+                        scaleY = height / (settings.canvasHeight || height);
+                    } else {
+                        scaleX = width / (videoStream?.width || width);
+                        scaleY = height / (videoStream?.height || height);
+                    }
+                    
+                    // 只在第一帧输出调试信息
+                    if (frameIndex === 0) {
+                        console.log(`[${taskId}] 🔧 叠加层设置: x=${overlay.x}, y=${overlay.y}, w=${overlay.width}, h=${overlay.height}`);
+                        console.log(`[${taskId}] 🔧 canvas尺寸: ${settings.canvasWidth}x${settings.canvasHeight}, 导出尺寸: ${width}x${height}`);
+                        console.log(`[${taskId}] 🔧 缩放比例: scaleX=${scaleX}, scaleY=${scaleY}`);
+                    }
                     
                     // 计算特效区域（相对于整个画布）
-                    const overlayX = (overlay.x - 20) * scaleX;
-                    const overlayY = (overlay.y - 20) * scaleY;
+                    const overlayX = overlay.x * scaleX;
+                    const overlayY = overlay.y * scaleY;
                     const overlayW = overlay.width * scaleX;
                     const overlayH = overlay.height * scaleY;
 
@@ -163,6 +211,17 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
 
                     // 绘制特效 - 只绘制在叠加层区域内
                     const theme = colorThemes[settings.colors] || colorThemes.purple;
+                    
+                    // 第一帧输出调试信息
+                    if (frameIndex === 0) {
+                        console.log(`[${taskId}] 🔍 settings.type = "${settings.type}"`);
+                        console.log(`[${taskId}] 🔍 settings.colors = "${settings.colors}"`);
+                        console.log(`[${taskId}] 🔍 theme = ${JSON.stringify(theme)}`);
+                        console.log(`[${taskId}] 🔍 particles.length = ${particles.length}`);
+                        console.log(`[${taskId}] 🎨 能量数据: bass=${energy.bass.toFixed(2)}, mid=${energy.mid.toFixed(2)}, treble=${energy.treble.toFixed(2)}`);
+                        console.log(`[${taskId}] 🎨 特效区域: x=${overlayX}, y=${overlayY}, w=${overlayW}, h=${overlayH}`);
+                    }
+                    
                     drawEffect(ctx, overlayX, overlayY, overlayW, overlayH, energy, time, theme, settings.type, particles, settings);
 
                     ctx.restore();
@@ -174,20 +233,24 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                     
                     // 更新进度
                     if (frameIndex % 30 === 0 || frameIndex === totalFrames - 1) {
-                        task.progress = Math.floor((frameIndex / totalFrames) * 50);
+                        const progress = Math.floor((frameIndex / totalFrames) * 50);
+                        task.progress = progress;
                         task.message = `生成帧 ${frameIndex}/${totalFrames}`;
+                        console.log(`[${taskId}] 📝 帧生成进度: ${frameIndex}/${totalFrames} (${progress}%)`);
                     }
                 }
                 
-                // 释放 canvas 引用，帮助垃圾回收
+                // 释放 canvas 引用
                 canvas.width = 0;
                 canvas.height = 0;
                 
                 // 处理下一批或完成
                 if (endIdx < totalFrames) {
-                    // 给事件循环一个喘息的机会，让垃圾回收器运行
+                    // 给事件循环喘息机会
                     setImmediate(() => processBatch(endIdx));
                 } else {
+                    // 清理音频数据释放内存
+                    analyzer.audioData = null;
                     resolve({ framesDir, fps, width, height });
                 }
             } catch (err) {
@@ -257,7 +320,7 @@ function drawEffect(ctx, x, y, w, h, energy, time, theme, type, particles, setti
 
     switch (type) {
         case 'particles':
-            drawParticles(ctx, centerX, centerY, w, h, energy, time, theme, particles);
+            drawParticles(ctx, x, y, w, h, energy, time, theme, particles, settings);
             break;
         case 'spectrum':
             drawSpectrum(ctx, x, y, w, h, energy, theme, settings);
@@ -266,13 +329,13 @@ function drawEffect(ctx, x, y, w, h, energy, time, theme, type, particles, setti
             drawWave(ctx, x, y, w, h, energy, time, theme, settings);
             break;
         case 'circular':
-            drawCircular(ctx, centerX, centerY, w, h, energy, time, theme);
+            drawCircular(ctx, x, y, w, h, energy, time, theme, settings);
             break;
         case 'particles-up':
-            drawParticlesUp(ctx, x, y, w, h, energy, time, theme, particles);
+            drawParticlesUp(ctx, x, y, w, h, energy, time, theme, particles, settings);
             break;
         default:
-            drawParticles(ctx, centerX, centerY, w, h, energy, time, theme, particles);
+            drawParticles(ctx, x, y, w, h, energy, time, theme, particles, settings);
     }
 
     ctx.restore();
@@ -292,34 +355,44 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 // 粒子效果
-function drawParticles(ctx, centerX, centerY, w, h, energy, time, theme, particles) {
+function drawParticles(ctx, x, y, w, h, energy, time, theme, particles, settings) {
+    const centerX = x + w / 2;
+    const centerY = y + h / 2;
+    const sensitivity = settings.sensitivity || 1;
+    
     particles.forEach((p, i) => {
-        const speedMultiplier = 1 + energy.bass * 3;
+        const speedMultiplier = 1 + energy.bass * 3 * sensitivity;
         p.x += p.vx * speedMultiplier;
         p.y += p.vy * speedMultiplier;
 
-        if (p.x < 0 || p.x > w) p.vx *= -1;
-        if (p.y < 0 || p.y > h) p.vy *= -1;
+        if (p.x < 0 || p.x > w) {
+            p.vx *= -1;
+            p.x = Math.max(0, Math.min(w, p.x));
+        }
+        if (p.y < 0 || p.y > h) {
+            p.vy *= -1;
+            p.y = Math.max(0, Math.min(h, p.y));
+        }
 
-        const dx = centerX - p.x;
-        const dy = centerY - p.y;
+        const dx = centerX - (x + p.x);
+        const dy = centerY - (y + p.y);
         const dist = Math.sqrt(dx * dx + dy * dy);
         
         if (dist > 0) {
-            p.x += (dx / dist) * energy.bass * 2;
-            p.y += (dy / dist) * energy.bass * 2;
+            p.x += (dx / dist) * energy.bass * 2 * sensitivity;
+            p.y += (dy / dist) * energy.bass * 2 * sensitivity;
         }
 
         const hue = (theme.hue + time * 30 + i * 2) % 360;
-        const size = p.size * (1 + energy.mid * 2);
+        const size = p.size * (1 + energy.mid * 2 * sensitivity);
         
         ctx.beginPath();
-        ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+        ctx.arc(x + p.x, y + p.y, size, 0, Math.PI * 2);
         ctx.fillStyle = `hsla(${hue}, ${theme.sat}%, ${theme.light}%, ${0.5 + energy.average * 0.5})`;
         ctx.fill();
     });
 
-    const pulseSize = Math.min(w, h) * 0.1 + energy.bass * Math.min(w, h) * 0.2;
+    const pulseSize = Math.min(w, h) * 0.1 + energy.bass * Math.min(w, h) * 0.2 * sensitivity;
     const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, pulseSize);
     gradient.addColorStop(0, `hsla(${theme.hue}, ${theme.sat}%, ${theme.light}%, ${energy.bass * 0.5})`);
     gradient.addColorStop(1, 'transparent');
@@ -331,25 +404,27 @@ function drawParticles(ctx, centerX, centerY, w, h, energy, time, theme, particl
 }
 
 // 粒子上升效果
-function drawParticlesUp(ctx, x, y, w, h, energy, time, theme, particles) {
+function drawParticlesUp(ctx, x, y, w, h, energy, time, theme, particles, settings) {
+    const sensitivity = settings.sensitivity || 1;
+    
     particles.forEach((p, i) => {
         p.life += 0.01;
         if (p.life > p.maxLife) {
             p.life = 0;
-            p.x = x + Math.random() * w;
-            p.y = y + h + 10;
+            p.x = Math.random() * w;
+            p.y = h + 10;
         }
 
-        const speed = (1 + energy.bass * 5) * (1 + p.size / 3);
+        const speed = (1 + energy.bass * 5 * sensitivity) * (1 + p.size / 3);
         p.y -= speed;
         p.x += Math.sin(time * 3 + i) * 0.5;
 
         const alpha = Math.sin((p.life / p.maxLife) * Math.PI) * (0.3 + energy.average * 0.7);
-        const hue = (theme.hue + (p.y - y) / h * 60) % 360;
-        const size = p.size * (1 + energy.mid * 2);
+        const hue = (theme.hue + p.y / h * 60) % 360;
+        const size = p.size * (1 + energy.mid * 2 * sensitivity);
 
         ctx.beginPath();
-        ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+        ctx.arc(x + p.x, y + p.y, size, 0, Math.PI * 2);
         ctx.fillStyle = `hsla(${hue}, ${theme.sat}%, ${theme.light}%, ${alpha})`;
         ctx.fill();
     });
@@ -364,15 +439,21 @@ function drawSpectrum(ctx, x, y, w, h, energy, theme, settings) {
     const direction = settings.barDirection || 'up';
     const mirror = settings.mirrorEffect !== false;
     const gradientDir = settings.gradientDirection || 'vertical';
+    const sensitivity = settings.sensitivity || 1;
 
     const totalBarWidth = barWidth + gap * barWidth;
     const totalWidth = barCount * totalBarWidth;
     const startX = x + (w - totalWidth) / 2;
+    
+    const spectrumData = energy.spectrum && energy.spectrum.length > 0 
+        ? energy.spectrum 
+        : new Array(64).fill(0);
 
     for (let i = 0; i < barCount; i++) {
-        const dataIndex = Math.floor((i / barCount) * energy.spectrum.length);
-        const value = energy.spectrum[dataIndex] || 0;
-        const barHeight = (value / 255) * h * 0.8 * energy.average;
+        const dataIndex = Math.floor((i / barCount) * spectrumData.length);
+        const value = spectrumData[dataIndex] || 0;
+        const normalizedValue = value / 255;
+        const barHeight = Math.max(4, normalizedValue * h * 0.85 * sensitivity);
 
         const hue = (theme.hue + (i / barCount) * 60) % 360;
         const bx = startX + i * totalBarWidth;
@@ -462,6 +543,11 @@ function drawWave(ctx, x, y, w, h, energy, time, theme, settings) {
     const lineWidth = settings.lineWidth || 3;
     const lines = settings.waveLines || 1;
     const glow = settings.glowEffect !== false;
+    const sensitivity = settings.sensitivity || 1;
+    
+    const spectrumData = energy.spectrum && energy.spectrum.length > 0 
+        ? energy.spectrum 
+        : new Array(128).fill(128);
 
     // 确定起始位置
     let startX, startY;
@@ -506,11 +592,11 @@ function drawWave(ctx, x, y, w, h, energy, time, theme, settings) {
         const points = 200;
         for (let i = 0; i < points; i++) {
             const t = i / points;
-            const dataIndex = Math.floor(t * energy.spectrum.length);
-            const v = ((energy.spectrum[dataIndex] || 128) / 128) - 1;
+            const dataIndex = Math.floor(t * spectrumData.length);
+            const v = ((spectrumData[dataIndex] || 128) / 128) - 1;
 
             let px, py;
-            const waveHeight = h * 0.3 * amplitude * (1 + energy.bass);
+            const waveHeight = h * 0.3 * amplitude * sensitivity * (1 + energy.bass);
 
             if (origin === 'center' || origin === 'left' || origin === 'right') {
                 // 水平波形
@@ -538,15 +624,24 @@ function drawWave(ctx, x, y, w, h, energy, time, theme, settings) {
 }
 
 // 环形效果
-function drawCircular(ctx, centerX, centerY, w, h, energy, time, theme) {
+function drawCircular(ctx, x, y, w, h, energy, time, theme, settings) {
+    const centerX = x + w / 2;
+    const centerY = y + h / 2;
+    const sensitivity = settings.sensitivity || 1;
     const radius = Math.min(w, h) * 0.35;
     const bars = 60;
+    
+    const spectrumData = energy.spectrum && energy.spectrum.length > 0 
+        ? energy.spectrum 
+        : new Array(64).fill(128);
 
     ctx.beginPath();
     for (let i = 0; i < bars; i++) {
         const angle = (i / bars) * Math.PI * 2 - Math.PI / 2;
-        // 模拟频谱数据
-        const amp = (Math.sin(i * 0.5 + time * 3) * 0.5 + 0.5) * radius * 0.3 * (1 + energy.bass);
+        const dataIndex = Math.floor((i / bars) * spectrumData.length);
+        const value = spectrumData[dataIndex] || 128;
+        const normalizedValue = value / 255;
+        const amp = normalizedValue * radius * 0.5 * sensitivity * (1 + energy.bass);
         const r = radius + amp;
         const px = centerX + Math.cos(angle) * r;
         const py = centerY + Math.sin(angle) * r;
@@ -566,7 +661,7 @@ function drawCircular(ctx, centerX, centerY, w, h, energy, time, theme) {
     ctx.shadowColor = ctx.strokeStyle;
     ctx.stroke();
 
-    const centerPulse = radius * 0.2 + energy.bass * radius * 0.3;
+    const centerPulse = radius * 0.2 + energy.bass * radius * 0.3 * sensitivity;
     ctx.beginPath();
     ctx.arc(centerX, centerY, centerPulse, 0, Math.PI * 2);
     ctx.fillStyle = `hsla(${hue}, ${theme.sat}%, ${theme.light}%, ${0.3 + energy.average * 0.4})`;
@@ -593,7 +688,7 @@ async function mergeVideoWithEffect(inputPath, framesDir, fps, width, height, ou
             .complexFilter([
                 // 将特效帧叠加到原视频上
                 // 格式转换确保透明度正确处理
-                '[1:v]format=rgba[fx];',
+                '[1:v]format=rgba[fx]',
                 '[0:v][fx]overlay=0:0:format=auto:repeatlast=0[output]'
             ])
             .outputOptions([
@@ -660,9 +755,9 @@ async function mergeWithBackground(bgImagePath, audioPath, framesDir, fps, width
             ])
             .complexFilter([
                 // 将背景图缩放到目标尺寸
-                '[0:v]scale=' + width + ':' + height + ':force_original_aspect_ratio=decrease,pad=' + width + ':' + height + ':(ow-iw)/2:(oh-ih)/2[bg];',
+                '[0:v]scale=' + width + ':' + height + ':force_original_aspect_ratio=decrease,pad=' + width + ':' + height + ':(ow-iw)/2:(oh-ih)/2[bg]',
                 // 特效帧格式转换
-                '[2:v]format=rgba[fx];',
+                '[2:v]format=rgba[fx]',
                 // 特效叠加到背景图上
                 '[bg][fx]overlay=0:0:format=auto:repeatlast=0[output]'
             ])
@@ -722,8 +817,22 @@ app.post('/api/export', multiUpload, async (req, res) => {
             return res.status(400).json({ error: '没有上传视频文件' });
         }
 
+        console.log('\n========== 收到导出请求 ==========');
+        console.log(`📹 视频文件: ${videoFile.originalname} (${(videoFile.size / 1024 / 1024).toFixed(2)} MB)`);
+        if (bgImageFile) {
+            console.log(`🖼️  背景图: ${bgImageFile.originalname}`);
+        }
+
         const settings = JSON.parse(req.body.settings || '{}');
+        console.log(`⚙️  设置: ${JSON.stringify(settings)}`);
+        
+        if (settings.bgImageWidth && settings.bgImageHeight) {
+            console.log(`🖼️  背景图尺寸: ${settings.bgImageWidth}x${settings.bgImageHeight}`);
+        }
+
         const taskId = uuidv4();
+        console.log(`🔑 任务ID: ${taskId}`);
+
         const outputDir = path.join(tempDir, taskId);
         fs.mkdirSync(outputDir, { recursive: true });
 
@@ -747,15 +856,18 @@ app.post('/api/export', multiUpload, async (req, res) => {
                 const task = exportTasks.get(taskId);
                 
                 // 1. 生成可视化帧（透明背景）
+                console.log(`\n[${taskId}] 🎨 开始生成可视化帧...`);
                 task.message = '生成可视化帧...';
                 const { framesDir, fps, width, height } = await generateVisualizationFrames(
                     videoFile.path, settings, taskId, outputDir
                 );
+                console.log(`[${taskId}] ✅ 可视化帧生成完成 (${width}x${height} @ ${fps}fps)`);
 
                 // 2. 合并视频 - 将透明特效帧叠加到原视频或背景图上
                 const outputFilename = `exported_${Date.now()}.mp4`;
                 const outputPath = path.join(exportsDir, outputFilename);
                 
+                console.log(`[${taskId}] 🎬 开始合并视频...`);
                 if (settings.useBgImage && task.bgImagePath) {
                     // 使用背景图作为基底
                     await mergeWithBackground(task.bgImagePath, videoFile.path, framesDir, fps, width, height, outputPath, taskId);
@@ -763,17 +875,21 @@ app.post('/api/export', multiUpload, async (req, res) => {
                     // 使用原视频作为基底
                     await mergeVideoWithEffect(videoFile.path, framesDir, fps, width, height, outputPath, taskId);
                 }
+                console.log(`[${taskId}] ✅ 视频合并完成`);
 
                 // 3. 清理临时文件
                 task.outputPath = outputPath;
                 task.outputUrl = `/exports/${outputFilename}`;
                 
+                console.log(`[${taskId}] 🧹 清理临时文件...`);
                 // 清理
                 fs.rmSync(outputDir, { recursive: true, force: true });
                 fs.unlinkSync(videoFile.path);
                 if (task.bgImagePath) {
                     fs.unlinkSync(task.bgImagePath);
                 }
+                console.log(`[${taskId}] ✅ 导出完成! 输出: ${outputFilename}`);
+                console.log(`[${taskId}] ========== 导出任务结束 ==========\n`);
 
             } catch (error) {
                 console.error('导出错误:', error);
@@ -793,20 +909,26 @@ app.post('/api/export', multiUpload, async (req, res) => {
 
 // 查询导出状态
 app.get('/api/export/status/:taskId', (req, res) => {
-    const task = exportTasks.get(req.params.taskId);
+    const taskId = req.params.taskId;
+
+    const task = exportTasks.get(taskId);
     if (!task) {
+        console.log(`❌ 任务不存在: ${taskId}`);
         return res.status(404).json({ error: '任务不存在' });
     }
-    res.json(task);
+   res.json(task);
 });
 
 // 下载导出的视频
 app.get('/api/export/download/:taskId', (req, res) => {
-    const task = exportTasks.get(req.params.taskId);
+    const taskId = req.params.taskId;
+    console.log(`📥 下载请求: ${taskId}`);
+    const task = exportTasks.get(taskId);
     if (!task || task.status !== 'completed') {
+        console.log(`❌ 下载失败: 视频不存在或未完成`);
         return res.status(404).json({ error: '视频不存在或未完成' });
     }
-
+    console.log(`📥 开始下载: ${task.outputPath}`);
     res.download(task.outputPath, 'visualized_video.mp4');
 });
 
