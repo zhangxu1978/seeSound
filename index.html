@@ -290,6 +290,35 @@
             box-shadow: none;
         }
 
+        .btn-secondary {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 8px;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .config-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .config-buttons button {
+            flex: 1;
+            padding: 10px 8px;
+            font-size: 12px;
+        }
+
         /* 导出进度 */
         .export-progress {
             display: none;
@@ -497,6 +526,9 @@
                         <div class="color-option" style="background: linear-gradient(135deg, #4facfe, #00f2fe)" data-colors="blue"></div>
                         <div class="color-option" style="background: linear-gradient(135deg, #43e97b, #38f9d7)" data-colors="green"></div>
                         <div class="color-option" style="background: linear-gradient(135deg, #fa709a, #fee140)" data-colors="warm"></div>
+                        <div class="color-option" style="background: linear-gradient(135deg, #ffffff, #e0e0e0)" data-colors="white"></div>
+                        <div class="color-option" style="background: linear-gradient(135deg, #2d2d2d, #1a1a1a)" data-colors="black"></div>
+                        <div class="color-option" style="background: linear-gradient(135deg, #ffd700, #ff8c00)" data-colors="gold"></div>
                     </div>
                 </div>
 
@@ -721,6 +753,20 @@
                     <div class="progress-bar-container">
                         <div class="progress-bar-fill" id="exportProgressBar"></div>
                     </div>
+                </div>
+            </div>
+
+            <!-- 配置管理 -->
+            <div class="export-section">
+                <h3>💾 配置管理</h3>
+                <div class="config-buttons">
+                    <button class="btn-secondary" id="saveConfigBtn">
+                        💾 保存配置
+                    </button>
+                    <button class="btn-secondary" id="loadConfigBtn">
+                        📂 载入配置
+                    </button>
+                    <input type="file" id="configFile" accept=".json" style="display: none;">
                 </div>
             </div>
         </div>

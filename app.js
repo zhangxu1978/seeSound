@@ -49,7 +49,10 @@ const colorThemes = {
     pink: { hue: 320, sat: 80, light: 65 },
     blue: { hue: 200, sat: 90, light: 60 },
     green: { hue: 150, sat: 70, light: 55 },
-    warm: { hue: 30, sat: 90, light: 60 }
+    warm: { hue: 30, sat: 90, light: 60 },
+    white: { hue: 0, sat: 0, light: 95 },
+    black: { hue: 0, sat: 0, light: 20 },
+    gold: { hue: 45, sat: 100, light: 60 }
 };
 
 // 初始化
@@ -98,6 +101,13 @@ function bindEvents() {
     document.getElementById('playBtn').addEventListener('click', togglePlay);
     document.getElementById('progressBar').addEventListener('click', seekVideo);
     document.getElementById('exportBtn').addEventListener('click', exportVideo);
+
+    // 配置管理
+    document.getElementById('saveConfigBtn').addEventListener('click', saveConfig);
+    document.getElementById('loadConfigBtn').addEventListener('click', () => {
+        document.getElementById('configFile').click();
+    });
+    document.getElementById('configFile').addEventListener('change', loadConfig);
 
     // 效果类型
     document.getElementById('effectType').addEventListener('change', (e) => {
@@ -1001,6 +1011,132 @@ function removeBgImage() {
             setupCanvasSize(1280, 720);
         }
     }
+}
+
+// 保存配置
+function saveConfig() {
+    const config = {
+        effectSettings: {
+            type: effectSettings.type,
+            colors: effectSettings.colors,
+            sensitivity: effectSettings.sensitivity,
+            opacity: effectSettings.opacity,
+            barDirection: effectSettings.barDirection,
+            barCount: effectSettings.barCount,
+            barWidth: effectSettings.barWidth,
+            barGap: effectSettings.barGap,
+            barRadius: effectSettings.barRadius,
+            mirrorEffect: effectSettings.mirrorEffect,
+            gradientDirection: effectSettings.gradientDirection,
+            waveOrigin: effectSettings.waveOrigin,
+            amplitude: effectSettings.amplitude,
+            frequency: effectSettings.frequency,
+            lineWidth: effectSettings.lineWidth,
+            waveLines: effectSettings.waveLines,
+            glowEffect: effectSettings.glowEffect,
+            transformType: effectSettings.transformType,
+            transformIntensity: effectSettings.transformIntensity,
+            transformSpeed: effectSettings.transformSpeed,
+            position: effectSettings.position
+        },
+        overlayPosition: {
+            width: document.getElementById('overlayContainer').style.width,
+            height: document.getElementById('overlayContainer').style.height,
+            left: document.getElementById('overlayContainer').style.left,
+            top: document.getElementById('overlayContainer').style.top
+        }
+    };
+
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'seesound-config.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// 载入配置
+function loadConfig(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const config = JSON.parse(event.target.result);
+
+            if (config.effectSettings) {
+                Object.assign(effectSettings, config.effectSettings);
+
+                document.getElementById('effectType').value = effectSettings.type;
+                document.getElementById('sensitivity').value = effectSettings.sensitivity;
+                document.getElementById('sensitivityValue').textContent = effectSettings.sensitivity;
+                document.getElementById('opacity').value = effectSettings.opacity;
+                document.getElementById('opacityValue').textContent = effectSettings.opacity;
+
+                document.getElementById('barDirection').value = effectSettings.barDirection;
+                document.getElementById('barCount').value = effectSettings.barCount;
+                document.getElementById('barCountValue').textContent = effectSettings.barCount;
+                document.getElementById('barWidth').value = effectSettings.barWidth;
+                document.getElementById('barWidthValue').textContent = effectSettings.barWidth;
+                document.getElementById('barGap').value = effectSettings.barGap;
+                document.getElementById('barGapValue').textContent = effectSettings.barGap;
+                document.getElementById('barRadius').value = effectSettings.barRadius;
+                document.getElementById('barRadiusValue').textContent = effectSettings.barRadius;
+                document.getElementById('mirrorEffect').checked = effectSettings.mirrorEffect;
+                document.getElementById('gradientDirection').value = effectSettings.gradientDirection;
+
+                document.getElementById('waveOrigin').value = effectSettings.waveOrigin;
+                document.getElementById('amplitude').value = effectSettings.amplitude;
+                document.getElementById('amplitudeValue').textContent = effectSettings.amplitude;
+                document.getElementById('frequency').value = effectSettings.frequency;
+                document.getElementById('frequencyValue').textContent = effectSettings.frequency;
+                document.getElementById('lineWidth').value = effectSettings.lineWidth;
+                document.getElementById('lineWidthValue').textContent = effectSettings.lineWidth;
+                document.getElementById('waveLines').value = effectSettings.waveLines;
+                document.getElementById('waveLinesValue').textContent = effectSettings.waveLines;
+                document.getElementById('glowEffect').checked = effectSettings.glowEffect;
+
+                document.getElementById('transformType').value = effectSettings.transformType;
+                document.getElementById('transformIntensity').value = effectSettings.transformIntensity;
+                document.getElementById('transformIntensityValue').textContent = effectSettings.transformIntensity;
+                document.getElementById('transformSpeed').value = effectSettings.transformSpeed;
+                document.getElementById('transformSpeedValue').textContent = effectSettings.transformSpeed;
+
+                updateSettingsVisibility();
+
+                document.querySelectorAll('.color-option').forEach(opt => {
+                    opt.classList.remove('active');
+                    if (opt.dataset.colors === effectSettings.colors) {
+                        opt.classList.add('active');
+                    }
+                });
+
+                document.querySelectorAll('.preset-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.position === effectSettings.position) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
+
+            if (config.overlayPosition) {
+                const overlay = document.getElementById('overlayContainer');
+                if (config.overlayPosition.width) overlay.style.width = config.overlayPosition.width;
+                if (config.overlayPosition.height) overlay.style.height = config.overlayPosition.height;
+                if (config.overlayPosition.left) overlay.style.left = config.overlayPosition.left;
+                if (config.overlayPosition.top) overlay.style.top = config.overlayPosition.top;
+            }
+
+            initParticles();
+        } catch (err) {
+            alert('配置文件格式错误');
+            console.error(err);
+        }
+    };
+    reader.readAsText(file);
+    document.getElementById('configFile').value = '';
 }
 
 
