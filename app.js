@@ -5,6 +5,9 @@ let videoCanvas, effectCanvas, videoCtx, effectCtx;
 let isPlaying = false;
 let animationId;
 let particles = [];
+// 砖块吸附：记录每根柱子顶部砖块的当前 Y 位置（用于"向上"方向）
+// brickPositions[i] = 砖块当前高度（与柱子同单位：px 高度值）
+let brickPositions = [];
 let dataArray, bufferLength;
 let currentFile = null;
 let isVideo = false;
@@ -30,6 +33,7 @@ let effectSettings = {
     barRadius: 4,
     mirrorEffect: true,
     gradientDirection: 'vertical',
+    barBrick: false,
     // 波形设置
     waveOrigin: 'center',
     amplitude: 1,
@@ -137,6 +141,11 @@ function bindEvents() {
     document.getElementById('barDirection').addEventListener('change', (e) => effectSettings.barDirection = e.target.value);
     document.getElementById('gradientDirection').addEventListener('change', (e) => effectSettings.gradientDirection = e.target.value);
     document.getElementById('mirrorEffect').addEventListener('change', (e) => effectSettings.mirrorEffect = e.target.checked);
+    document.getElementById('barBrick').addEventListener('change', (e) => {
+        effectSettings.barBrick = e.target.checked;
+        // 重置砖块状态
+        brickPositions = [];
+    });
 
     // 波形设置
     document.getElementById('waveOrigin').addEventListener('change', (e) => effectSettings.waveOrigin = e.target.value);
@@ -631,10 +640,22 @@ function drawSpectrum(energy, theme) {
     const radius = effectSettings.barRadius;
     const direction = effectSettings.barDirection;
     const mirror = effectSettings.mirrorEffect;
+    const useBrick = effectSettings.barBrick;
 
     const totalBarWidth = barWidth + gap * barWidth;
     const totalWidth = barCount * totalBarWidth;
     const startX = (w - totalWidth) / 2;
+
+    // 砖块尺寸
+    const brickH = Math.max(4, Math.round(barWidth * 0.6));
+    const brickW = barWidth;
+    // 砖块下落速度（每帧减少的高度值）
+    const brickFallSpeed = 1.5;
+
+    // 初始化砖块数组
+    if (useBrick && brickPositions.length !== barCount) {
+        brickPositions = new Array(barCount).fill(0);
+    }
 
     for (let i = 0; i < barCount; i++) {
         // 计算相对位置（0-1）
@@ -729,6 +750,65 @@ function drawSpectrum(energy, theme) {
             }
             roundRect(effectCtx, mx, my, bw, bh, radius);
             effectCtx.fill();
+        }
+
+        // ---- 砖块吸附逻辑（仅支持 up/down/center 方向） ----
+        if (useBrick && (direction === 'up' || direction === 'down' || direction === 'center')) {
+            // 当前柱子高度
+            const currentH = barHeight;
+
+            // 如果柱子上升，砖块被顶上去（贴着柱子顶部）
+            if (currentH >= brickPositions[i]) {
+                brickPositions[i] = currentH;
+            } else {
+                // 柱子下落，砖块缓慢下落
+                brickPositions[i] = Math.max(currentH, brickPositions[i] - brickFallSpeed);
+            }
+
+            const brickHeight = brickPositions[i];
+
+            // 根据方向确定砖块位置
+            let brx, bry;
+            const gap2 = 2; // 砖块与柱子顶端的间距（像素）
+
+            if (direction === 'up') {
+                brx = bx;
+                bry = h - brickHeight - brickH - gap2;
+            } else if (direction === 'down') {
+                brx = bx;
+                bry = brickHeight + gap2;
+            } else { // center
+                // 上方砖块
+                brx = bx;
+                bry = (h - brickHeight) / 2 - brickH - gap2;
+            }
+
+            // 绘制砖块（亮色，无渐变）
+            const brickColor = `hsl(${hue}, ${theme.sat}%, ${Math.min(theme.light + 35, 95)}%)`;
+            effectCtx.fillStyle = brickColor;
+            roundRect(effectCtx, brx, bry, brickW, brickH, Math.min(2, radius));
+            effectCtx.fill();
+
+            // 镜像砖块（跟随对应方向的镜像柱子）
+            if (mirror) {
+                let mbrx, mbry;
+                if (direction === 'up') {
+                    // 镜像柱子从顶部向下，砖块贴在镜像柱子的底端下方
+                    mbrx = bx;
+                    mbry = brickHeight + gap2; // 对应 down 方向砖块位置
+                } else if (direction === 'down') {
+                    // 镜像柱子从底部向上，砖块贴在镜像柱子顶端上方
+                    mbrx = bx;
+                    mbry = h - brickHeight - brickH - gap2;
+                } else {
+                    // center 方向：下方砖块（关于画布中心对称）
+                    mbrx = bx;
+                    mbry = h - bry - brickH;
+                }
+                effectCtx.fillStyle = brickColor;
+                roundRect(effectCtx, mbrx, mbry, brickW, brickH, Math.min(2, radius));
+                effectCtx.fill();
+            }
         }
     }
 }
@@ -1037,6 +1117,7 @@ function saveConfig() {
             barRadius: effectSettings.barRadius,
             mirrorEffect: effectSettings.mirrorEffect,
             gradientDirection: effectSettings.gradientDirection,
+            barBrick: effectSettings.barBrick,
             waveOrigin: effectSettings.waveOrigin,
             amplitude: effectSettings.amplitude,
             frequency: effectSettings.frequency,
@@ -1095,6 +1176,9 @@ function loadConfigFile(e) {
                 document.getElementById('barRadiusValue').textContent = effectSettings.barRadius;
                 document.getElementById('mirrorEffect').checked = effectSettings.mirrorEffect;
                 document.getElementById('gradientDirection').value = effectSettings.gradientDirection;
+                if (typeof effectSettings.barBrick !== 'undefined') {
+                    document.getElementById('barBrick').checked = effectSettings.barBrick;
+                }
 
                 document.getElementById('waveOrigin').value = effectSettings.waveOrigin;
                 document.getElementById('amplitude').value = effectSettings.amplitude;
