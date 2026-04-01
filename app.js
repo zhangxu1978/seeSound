@@ -637,12 +637,17 @@ function drawSpectrum(energy, theme) {
     const startX = (w - totalWidth) / 2;
 
     for (let i = 0; i < barCount; i++) {
-        // 正常的频谱数据获取（线性映射）
-        const dataIndex = Math.floor((i / barCount) * bufferLength);
+        // 计算相对位置（0-1）
+        const normalizedPos = i / (barCount - 1);
+        
+        // 映射到频率范围，中间对应低频（能量最强），两边对应高频
+        // 抛物线映射：中间 = 0.1（低频），两边 = 0.8（高频）
+        const frequencyPos = 0.1 + Math.pow(2 * normalizedPos - 1, 2) * 0.7;
+        const dataIndex = Math.floor(frequencyPos * bufferLength);
         const value = energy.data[dataIndex] || 0;
         
         // 计算能量值
-        const barHeight = (value / 255) * h * 0.8 * energy.average;
+        const barHeight = Math.max(10, (value / 255) * h * 0.8 * energy.average);
 
         // 统一颜色主题
         const hue = theme.hue;
