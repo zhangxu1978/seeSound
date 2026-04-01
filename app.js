@@ -107,7 +107,7 @@ function bindEvents() {
     document.getElementById('loadConfigBtn').addEventListener('click', () => {
         document.getElementById('configFile').click();
     });
-    document.getElementById('configFile').addEventListener('change', loadConfig);
+    document.getElementById('configFile').addEventListener('change', loadConfigFile);
 
     // 效果类型
     document.getElementById('effectType').addEventListener('change', (e) => {
@@ -637,12 +637,15 @@ function drawSpectrum(energy, theme) {
     const startX = (w - totalWidth) / 2;
 
     for (let i = 0; i < barCount; i++) {
-        // 获取频谱数据
+        // 正常的频谱数据获取（线性映射）
         const dataIndex = Math.floor((i / barCount) * bufferLength);
         const value = energy.data[dataIndex] || 0;
+        
+        // 计算能量值
         const barHeight = (value / 255) * h * 0.8 * energy.average;
 
-        const hue = (theme.hue + (i / barCount) * 60) % 360;
+        // 统一颜色主题
+        const hue = theme.hue;
         const x = startX + i * totalBarWidth;
 
         // 根据方向绘制
@@ -1056,8 +1059,8 @@ function saveConfig() {
     URL.revokeObjectURL(url);
 }
 
-// 载入配置
-function loadConfig(e) {
+// 载入配置文件
+function loadConfigFile(e) {
     const file = e.target.files[0];
     if (!file) return;
 
