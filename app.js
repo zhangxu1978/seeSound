@@ -639,10 +639,11 @@ function drawSpectrum(energy, theme) {
     for (let i = 0; i < barCount; i++) {
         // 计算相对位置（0-1）
         const normalizedPos = i / (barCount - 1);
-        
-        // 映射到频率范围，中间对应低频（能量最强），两边对应高频
-        // 抛物线映射：中间 = 0.1（低频），两边 = 0.8（高频）
-        const frequencyPos = 0.1 + Math.pow(2 * normalizedPos - 1, 2) * 0.7;
+
+        // 对称映射：两边对应低频，中间对应中高频（能量较强区域）
+        // 使用抛物线形状：中间 = 中高频，两边 = 低频
+        const distFromCenter = Math.abs(normalizedPos - 0.5) * 2; // 0~1, 0是中间，1是两边
+        const frequencyPos = 0.1 + distFromCenter * 0.5; // 中间对应0.1（中高频），两边对应0.6（低频）
         const dataIndex = Math.floor(frequencyPos * bufferLength);
         const value = energy.data[dataIndex] || 0;
         
