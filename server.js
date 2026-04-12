@@ -1029,8 +1029,11 @@ app.post('/api/export-external', externalUpload, async (req, res) => {
         let settings;
         try {
             const configContent = fs.readFileSync(configPath, 'utf8');
-            settings = JSON.parse(configContent);
+            const config = JSON.parse(configContent);
+            // 检查配置文件结构，支持直接的设置对象或包含 effectSettings 的结构
+            settings = config.effectSettings || config;
             console.log(`✅ 配置文件读取成功`);
+            console.log(`📝 配置内容:`, settings);
         } catch (error) {
             console.error('读取配置文件失败:', error);
             // 清理上传的文件
