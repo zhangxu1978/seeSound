@@ -121,7 +121,24 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
     console.log(`[${taskId}] 🖼️ 待生成帧数: ${totalFrames}`);
 
     // 计算特效区域大小用于粒子初始化
-    const overlay = settings.overlayRect || { x: 0, y: 0, width, height };
+    let overlay = settings.overlayRect;
+    
+    // 如果没有overlayRect但有position设置，根据position计算overlayRect
+    if (!overlay && settings.position) {
+        const positions = {
+            'fullscreen': { x: 0, y: 0, width: width, height: height },
+            'bottom': { x: 0, y: height * 0.75, width: width, height: height * 0.25 },
+            'top': { x: 0, y: 0, width: width, height: height * 0.25 },
+            'center': { x: width * 0.2, y: height * 0.3, width: width * 0.6, height: height * 0.4 },
+            'left': { x: 0, y: 0, width: width * 0.3, height: height },
+            'right': { x: width * 0.7, y: 0, width: width * 0.3, height: height }
+        };
+        overlay = positions[settings.position] || { x: 0, y: 0, width, height };
+    } else if (!overlay) {
+        // 默认全屏
+        overlay = { x: 0, y: 0, width, height };
+    }
+    
     const scaleFactor = settings.scaleFactor || 1;
     const canvasW = settings.canvasWidth || width;
     const canvasH = settings.canvasHeight || height;
@@ -193,12 +210,8 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                     // 正确清除画布
                     ctx.clearRect(0, 0, width, height);
 
-                    const overlay = settings.overlayRect || { x: 0, y: 0, width, height };
-                    
-                    // 计算导出时的坐标转换
-                    // overlay 是 CSS 像素坐标，需要转换为导出尺寸坐标
-                    // scaleFactor = videoCanvas像素 / CSS显示像素
-                    // 然后如果导出尺寸与 videoCanvas 尺寸不同，需要额外缩放
+                    // 使用前面计算好的overlay（基于position）
+                    // 这些值已经是基于导出尺寸的坐标
                     const scaleFactor = settings.scaleFactor || 1;
                     const canvasW = settings.canvasWidth || width;
                     const canvasH = settings.canvasHeight || height;
@@ -207,16 +220,16 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                     
                     // 只在第一帧输出调试信息
                     if (frameIndex === 0) {
-                        console.log(`[${taskId}] 🔧 叠加层设置(CSS): x=${overlay.x}, y=${overlay.y}, w=${overlay.width}, h=${overlay.height}`);
+                        console.log(`[${taskId}] 🔧 叠加层设置: x=${overlay.x}, y=${overlay.y}, w=${overlay.width}, h=${overlay.height}`);
                         console.log(`[${taskId}] 🔧 videoCanvas尺寸: ${canvasW}x${canvasH}, 导出尺寸: ${width}x${height}`);
                         console.log(`[${taskId}] 🔧 scaleFactor=${scaleFactor}, exportScale=${exportScaleX}x${exportScaleY}`);
                     }
                     
-                    // CSS像素 -> videoCanvas像素 -> 导出尺寸像素
-                    const overlayX = overlay.x * scaleFactor * exportScaleX;
-                    const overlayY = overlay.y * scaleFactor * exportScaleY;
-                    const overlayW = overlay.width * scaleFactor * exportScaleX;
-                    const overlayH = overlay.height * scaleFactor * exportScaleY;
+                    // 直接使用计算好的overlay坐标
+                    const overlayX = overlay.x;
+                    const overlayY = overlay.y;
+                    const overlayW = overlay.width;
+                    const overlayH = overlay.height;
 
                     // 保存上下文并裁剪到叠加层区域
                     ctx.save();

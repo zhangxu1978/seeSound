@@ -1212,6 +1212,9 @@ function loadConfigFile(e) {
                         btn.classList.add('active');
                     }
                 });
+
+                // 应用位置预设
+                applyPositionPreset(effectSettings.position);
             }
 
             if (config.overlayPosition) {
