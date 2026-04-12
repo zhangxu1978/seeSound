@@ -1,11 +1,12 @@
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
 const { v4: uuidv4 } = require('uuid');
-const path = require('path');
-const fs = require('fs');
 const { createCanvas } = require('canvas');
+const fetch = require('node-fetch');
 const AudioAnalyzer = require('./audio-analyzer');
 
 const config = require('./config');
@@ -61,7 +62,10 @@ const colorThemes = {
     pink: { hue: 320, sat: 80, light: 65 },
     blue: { hue: 200, sat: 90, light: 60 },
     green: { hue: 150, sat: 70, light: 55 },
-    warm: { hue: 30, sat: 90, light: 60 }
+    warm: { hue: 30, sat: 90, light: 60 },
+    white: { hue: 0, sat: 0, light: 95 },
+    black: { hue: 0, sat: 0, light: 20 },
+    gold: { hue: 45, sat: 100, light: 60 }
 };
 
 // 生成可视化帧 - 流式处理版本，最小化内存使用
@@ -161,14 +165,21 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                     const sensitivity = settings.sensitivity || settings.sensitivvity || 1;
                     
                     const spectrumData = frameEnergy.spectrum && frameEnergy.spectrum.length > 0 
-                        ? frameEnergy.spectrum.slice(0, 64) 
-                        : new Array(64).fill(128);
+                        ? frameEnergy.spectrum.slice(0, 128) 
+                        : new Array(128).fill(128);
+                    
+                    // 计算与前端一致的 average 值
+                    let total = 0;
+                    for (let i = 0; i < spectrumData.length; i++) {
+                        total += spectrumData[i];
+                    }
+                    const average = (total / spectrumData.length / 255) * sensitivity;
                     
                     const energy = {
                         bass: frameEnergy.bass * sensitivity,
                         mid: frameEnergy.mid * sensitivity,
                         treble: frameEnergy.treble * sensitivity,
-                        average: frameEnergy.average * sensitivity,
+                        average: average,
                         spectrum: spectrumData
                     };
                     
@@ -435,6 +446,9 @@ function drawParticlesUp(ctx, x, y, w, h, energy, time, theme, particles, settin
 }
 
 // 频谱效果 - 增强版
+// 存储历史高度值用于平滑处理
+const spectrumHistory = new Map();
+
 function drawSpectrum(ctx, x, y, w, h, energy, theme, settings) {
     const barCount = settings.barCount || 64;
     const barWidth = settings.barWidth || 8;
@@ -443,7 +457,6 @@ function drawSpectrum(ctx, x, y, w, h, energy, theme, settings) {
     const direction = settings.barDirection || 'up';
     const mirror = settings.mirrorEffect !== false;
     const gradientDir = settings.gradientDirection || 'vertical';
-    const sensitivity = settings.sensitivity || 1;
 
     const totalBarWidth = barWidth + gap * barWidth;
     const totalWidth = barCount * totalBarWidth;
@@ -451,15 +464,42 @@ function drawSpectrum(ctx, x, y, w, h, energy, theme, settings) {
     
     const spectrumData = energy.spectrum && energy.spectrum.length > 0 
         ? energy.spectrum 
-        : new Array(64).fill(0);
+        : energy.data && energy.data.length > 0
+        ? energy.data
+        : new Array(128).fill(0);
+
+    // 获取或初始化历史数据
+    const historyKey = `${settings.barCount}-${settings.barDirection}`;
+    if (!spectrumHistory.has(historyKey)) {
+        spectrumHistory.set(historyKey, new Array(barCount).fill(0));
+    }
+    const history = spectrumHistory.get(historyKey);
 
     for (let i = 0; i < barCount; i++) {
-        const dataIndex = Math.floor((i / barCount) * spectrumData.length);
-        const value = spectrumData[dataIndex] || 0;
-        const normalizedValue = value / 255;
-        const barHeight = Math.max(4, normalizedValue * h * 0.85 * sensitivity);
+        // 计算相对位置（0-1）
+        const normalizedPos = i / (barCount - 1);
 
-        const hue = (theme.hue + (i / barCount) * 60) % 360;
+        // 对称映射：两边对应低频，中间对应中高频（能量较强区域）
+        // 使用抛物线形状：中间 = 中高频，两边 = 低频
+        const distFromCenter = Math.abs(normalizedPos - 0.5) * 2; // 0~1, 0是中间，1是两边
+        const frequencyPos = 0.1 + distFromCenter * 0.5; // 中间对应0.1（中高频），两边对应0.6（低频）
+        const dataIndex = Math.floor(frequencyPos * spectrumData.length);
+        const value = spectrumData[dataIndex] || 0;
+        
+        // 计算能量值
+        const targetHeight = Math.max(10, (value / 255) * h * 0.8 * (energy.average || 1));
+        
+        // 平滑处理：使用历史值的加权平均
+        const smoothingFactor = 0.6; // 0-1，越大越平滑
+        const currentHeight = history[i];
+        const smoothedHeight = currentHeight * (1 - smoothingFactor) + targetHeight * smoothingFactor;
+        const barHeight = Math.max(10, smoothedHeight);
+        
+        // 更新历史值
+        history[i] = barHeight;
+
+        // 统一颜色主题
+        const hue = theme.hue;
         const bx = startX + i * totalBarWidth;
 
         let barX, barY, barW, barH;
@@ -537,6 +577,9 @@ function drawSpectrum(ctx, x, y, w, h, energy, theme, settings) {
             ctx.fill();
         }
     }
+
+    // 更新历史数据
+    spectrumHistory.set(historyKey, history);
 }
 
 // 波形效果 - 增强版
@@ -947,6 +990,136 @@ app.get('/api/exports', (req, res) => {
             createdAt: t.createdAt
         }));
     res.json(exports);
+});
+
+// 外部程序导出接口 - 支持直接文件上传
+const externalUpload = upload.fields([
+    { name: 'audio', maxCount: 1 },
+    { name: 'image', maxCount: 1 }
+]);
+
+app.post('/api/export-external', externalUpload, async (req, res) => {
+    try {
+        const audioFile = req.files?.audio?.[0];
+        const imageFile = req.files?.image?.[0];
+        const configName = req.body.configName;
+
+        if (!audioFile) {
+            return res.status(400).json({ error: '缺少音频文件' });
+        }
+
+        if (!imageFile) {
+            return res.status(400).json({ error: '缺少图片文件' });
+        }
+
+        if (!configName) {
+            return res.status(400).json({ error: '缺少配置文件名参数' });
+        }
+
+        console.log('\n========== 收到外部导出请求 ==========');
+        console.log(`🎵 音频文件: ${audioFile.originalname} (${(audioFile.size / 1024 / 1024).toFixed(2)} MB)`);
+        console.log(`🖼️  图片文件: ${imageFile.originalname} (${(imageFile.size / 1024 / 1024).toFixed(2)} MB)`);
+        console.log(`⚙️  配置文件名: ${configName}`);
+
+        // 自动补全配置文件路径
+        const configPath = path.join(__dirname, 'sound', 'config', `${configName}.json`);
+        console.log(`📁 配置文件路径: ${configPath}`);
+
+        // 读取配置文件
+        let settings;
+        try {
+            const configContent = fs.readFileSync(configPath, 'utf8');
+            settings = JSON.parse(configContent);
+            console.log(`✅ 配置文件读取成功`);
+        } catch (error) {
+            console.error('读取配置文件失败:', error);
+            // 清理上传的文件
+            fs.unlinkSync(audioFile.path);
+            fs.unlinkSync(imageFile.path);
+            return res.status(400).json({ error: '读取配置文件失败: ' + error.message });
+        }
+
+        const taskId = uuidv4();
+        console.log(`🔑 任务ID: ${taskId}`);
+
+        const outputDir = path.join(tempDir, taskId);
+        fs.mkdirSync(outputDir, { recursive: true });
+
+        // 使用上传的文件路径
+        const audioPath = audioFile.path;
+        const imagePath = imageFile.path;
+
+        // 创建任务
+        exportTasks.set(taskId, {
+            id: taskId,
+            status: 'processing',
+            progress: 0,
+            message: '开始处理...',
+            inputPath: audioPath,
+            bgImagePath: imagePath,
+            outputDir,
+            settings,
+            createdAt: new Date().toISOString()
+        });
+
+        res.json({ taskId });
+
+        // 异步处理
+        setImmediate(async () => {
+            try {
+                const task = exportTasks.get(taskId);
+                
+                // 1. 生成可视化帧（透明背景）
+                console.log(`\n[${taskId}] 🎨 开始生成可视化帧...`);
+                task.message = '生成可视化帧...';
+                const { framesDir, fps, width, height } = await generateVisualizationFrames(
+                    audioPath, settings, taskId, outputDir
+                );
+                console.log(`[${taskId}] ✅ 可视化帧生成完成 (${width}x${height} @ ${fps}fps)`);
+
+                // 2. 合并视频 - 使用背景图作为基底
+                const outputFilename = `exported_${Date.now()}.mp4`;
+                const outputPath = path.join(exportsDir, outputFilename);
+                
+                console.log(`[${taskId}] 🎬 开始合并视频...`);
+                await mergeWithBackground(imagePath, audioPath, framesDir, fps, width, height, outputPath, taskId);
+                console.log(`[${taskId}] ✅ 视频合并完成`);
+
+                // 3. 清理临时文件
+                task.outputPath = outputPath;
+                task.outputUrl = `/exports/${outputFilename}`;
+                task.status = 'completed';
+                
+                console.log(`[${taskId}] 🧹 清理临时文件...`);
+                // 清理
+                fs.rmSync(outputDir, { recursive: true, force: true });
+                fs.unlinkSync(audioPath);
+                fs.unlinkSync(imagePath);
+                console.log(`[${taskId}] ✅ 导出完成! 输出: ${outputFilename}`);
+                console.log(`[${taskId}] ========== 导出任务结束 ==========\n`);
+
+            } catch (error) {
+                console.error('导出错误:', error);
+                const task = exportTasks.get(taskId);
+                if (task) {
+                    task.status = 'failed';
+                    task.error = error.message;
+                }
+                // 清理临时目录和上传的文件
+                fs.rmSync(outputDir, { recursive: true, force: true });
+                try {
+                    fs.unlinkSync(audioPath);
+                    fs.unlinkSync(imagePath);
+                } catch (e) {
+                    // 忽略清理错误
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('API 错误:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // 健康检查

@@ -182,8 +182,18 @@ class AudioAnalyzer {
         for (let i = 0; i < spectrum.length; i++) {
             const mag = spectrum[i].magnitude || spectrum[i];
             magnitudes.push(mag);
-            
-            const normalized = mag / spectrum.length;
+        }
+
+        // 使用全局最大幅值进行归一化，确保不同帧之间的一致性
+        const globalMax = 1; // 归一化到 0-1 范围
+        const spectrumValues = magnitudes.map(mag => 
+            Math.min(255, Math.floor((mag / globalMax) * 255))
+        );
+
+        // 重新计算能量值，使用原始幅值
+        for (let i = 0; i < spectrum.length; i++) {
+            const mag = magnitudes[i];
+            const normalized = mag / globalMax;
             
             if (i < bassEnd) bass += normalized;
             else if (i < midEnd) mid += normalized;
@@ -192,12 +202,8 @@ class AudioAnalyzer {
             total += normalized;
         }
 
-        const maxMag = Math.max(...magnitudes, 1);
-        const spectrumValues = magnitudes.map(mag => 
-            Math.min(255, Math.floor((mag / maxMag) * 255))
-        );
-
-        const amplify = 50;
+        // 调整放大因子，确保能量值在合理范围内
+        const amplify = 100;
         bass = Math.min(1, bass / bassEnd * amplify);
         mid = Math.min(1, mid / (midEnd - bassEnd) * amplify);
         treble = Math.min(1, treble / (spectrum.length - midEnd) * amplify);
