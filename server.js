@@ -250,7 +250,9 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                         console.log(`[${taskId}] 🎨 特效区域: x=${overlayX}, y=${overlayY}, w=${overlayW}, h=${overlayH}`);
                     }
                     
-                    drawEffect(ctx, overlayX, overlayY, overlayW, overlayH, energy, time, theme, settings.type, particles, settings);
+                    // 传递 taskId 到 settings，确保每个任务有独立的历史数据
+                    const settingsWithTaskId = { ...settings, taskId };
+                    drawEffect(ctx, overlayX, overlayY, overlayW, overlayH, energy, time, theme, settings.type, particles, settingsWithTaskId);
 
                     ctx.restore();
 
@@ -481,8 +483,8 @@ function drawSpectrum(ctx, x, y, w, h, energy, theme, settings) {
         ? energy.data
         : new Array(128).fill(0);
 
-    // 获取或初始化历史数据
-    const historyKey = `${settings.barCount}-${settings.barDirection}`;
+    // 获取或初始化历史数据 - 使用任务ID作为前缀，确保每个任务有独立的历史数据
+    const historyKey = `${settings.taskId || 'default'}-${settings.barCount}-${settings.barDirection}`;
     if (!spectrumHistory.has(historyKey)) {
         spectrumHistory.set(historyKey, new Array(barCount).fill(0));
     }

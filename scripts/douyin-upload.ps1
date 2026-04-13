@@ -70,7 +70,7 @@ function Get-AgentBrowser {
 function Find-Ref {
     # 从快照中查找指定模式的 ref
     param([string]$Pattern, [string]$Snapshot)
-    if ($Snapshot -match $Pattern) {
+    if ($Snapshot -match $Pattern -and $matches.Count -gt 1) {
         return $matches[1]
     }
     return $null
@@ -102,13 +102,13 @@ Start-Sleep -Seconds 3
 Write-Host "`n[3/7] 检查并放弃旧草稿..." -ForegroundColor Yellow
 $snapshot = Get-AgentBrowser
 
-if ($snapshot -match '放弃发布|放弃[^的]') {
+if ($snapshot -match '放弃') {
     Write-Host "    发现旧草稿，点击放弃..." -ForegroundColor Gray
-    # 用 ref 方式点击
-    if ($snapshot -match '放弃(?:发布)?\s+\[ref=(\w+)\]') {
-        agent-browser --cdp $CDP_PORT click $matches[1] 2>&1 | Out-Null
-    } elseif ($snapshot -match '放弃\s+\[ref=(\w+)\]') {
-        agent-browser --cdp $CDP_PORT click $matches[1] 2>&1 | Out-Null
+    # 注意：PowerShell 中 @var 是 splat 操作符，必须用字符串拼接传 @ref
+    if ($snapshot -match '\[ref=(\w+)\][^\n]*放弃|放弃[^\n]*\[ref=(\w+)\]') {
+        $discardRef = if ($matches[1]) { $matches[1] } else { $matches[2] }
+        $discardArg = "@" + $discardRef
+        agent-browser --cdp $CDP_PORT click $discardArg 2>&1 | Out-Null
     }
     Start-Sleep -Seconds 2
 }
@@ -140,7 +140,7 @@ while ($elapsed -lt $UPLOAD_TIMEOUT_MS) {
     }
 
     # 显示进度
-    if ($snapshot -match "(\d+)%") {
+    if ($snapshot -match "(\d+)%" -and $matches.Count -gt 1) {
         $percent = $matches[1]
         $bar = ("=" * [math]::Floor([Math]::Min($percent, 100) / 5)) + (" " * (20 - [math]::Floor([Math]::Min($percent, 100) / 5)))
         Write-Host "`r    进度: [$bar] ${percent}%  " -NoNewline -ForegroundColor Cyan
@@ -165,27 +165,36 @@ $snapshot = Get-AgentBrowser
 # 6a. 标题
 if ($Title) {
     Write-Host "    填写标题: $Title" -ForegroundColor Gray
-    $ref = Find-Ref 'textbox.*填写作品标题.*\[ref=(\w+)\]' $snapshot
-    if ($ref) {
-        # 用 fill 清空并重新填写（比 type 更可靠）
-        agent-browser --cdp $CDP_PORT fill $ref $Title 2>&1 | Out-Null
-        Write-Host "    [v] 标题已填写" -ForegroundColor Green
+    if ([string]::IsNullOrEmpty($snapshot)) {
+        Write-Host "    [!] 快照为空，无法找到标题输入框" -ForegroundColor Red
     } else {
-        Write-Host "    [!] 未找到标题输入框" -ForegroundColor Yellow
+        # 抖音快照中标题框格式：textbox [ref=eXXX] 或 textbox "填写作品标题..." [ref=eXXX]
+        # 先尝试带 placeholder 的精确匹配
+        $ref = Find-Ref 'textbox[^[]*填写作品标题[^[]*\[ref=(\w+)\]' $snapshot
+        if (-not $ref) {
+            $ref = Find-Ref 'textbox[^[]*标题[^[]*\[ref=(\w+)\]' $snapshot
+        }
+        if (-not $ref) {
+            # 兜底：快照中第一个 textbox 即为标题框
+            $ref = Find-Ref 'textbox[^\S\n]*\[ref=(\w+)\]' $snapshot
+        }
+        if ($ref) {
+            Write-Host "    找到标题输入框 ref: $ref" -ForegroundColor Gray
+            # PowerShell 中 @ 是 splat 操作符，必须拼接字符串传 @ref
+            $refArg = "@" + $ref
+            $result = agent-browser --cdp $CDP_PORT fill $refArg $Title 2>&1
+            Write-Host "    fill 命令结果: $result" -ForegroundColor DarkGray
+            Write-Host "    [v] 标题已填写" -ForegroundColor Green
+        } else {
+            Write-Host "    [!] 未找到标题输入框" -ForegroundColor Yellow
+        }
     }
 }
 
-# 6b. 简介
-if ($Description) {
-    Write-Host "    填写简介: $Description" -ForegroundColor Gray
-    $ref = Find-Ref 'editable.*contenteditable.*\[ref=(\w+)\]' $snapshot
-    if ($ref) {
-        agent-browser --cdp $CDP_PORT fill $ref $Description 2>&1 | Out-Null
-        Write-Host "    [v] 简介已填写" -ForegroundColor Green
-    } else {
-        Write-Host "    [!] 未找到简介输入框" -ForegroundColor Yellow
-    }
-}
+# 6b. 简介（暂跳过，抖音 contenteditable 框定位不稳定）
+# if ($Description) {
+#     Write-Host "    填写简介: $Description" -ForegroundColor Gray
+# }
 
 # 6c. 定时发布时间
 if ($PublishTime) {
@@ -193,16 +202,18 @@ if ($PublishTime) {
     $snapshot = Get-AgentBrowser
 
     # 先点击定时发布复选框
-    $ref = Find-Ref 'checkbox "定时发布".*\[ref=(\w+)\]' $snapshot
+    $ref = Find-Ref 'checkbox[^[]*定时发布[^[]*\[ref=(\w+)\]' $snapshot
     if ($ref) {
-        agent-browser --cdp $CDP_PORT click $ref 2>&1 | Out-Null
+        $refArg = "@" + $ref
+        agent-browser --cdp $CDP_PORT click $refArg 2>&1 | Out-Null
         Start-Sleep -Seconds 1
 
         # 找到日期时间输入框并填入时间
         $snapshot = Get-AgentBrowser
-        $dtRef = Find-Ref 'textbox "日期和时间".*\[ref=(\w+)\]' $snapshot
+        $dtRef = Find-Ref 'textbox[^[]*日期和时间[^[]*\[ref=(\w+)\]' $snapshot
         if ($dtRef) {
-            agent-browser --cdp $CDP_PORT fill $dtRef $PublishTime 2>&1 | Out-Null
+            $dtArg = "@" + $dtRef
+            agent-browser --cdp $CDP_PORT fill $dtArg $PublishTime 2>&1 | Out-Null
             Write-Host "    [v] 定时发布时间已设置" -ForegroundColor Green
         } else {
             Write-Host "    [!] 未找到日期时间输入框" -ForegroundColor Yellow
@@ -218,9 +229,10 @@ if (-not $SkipPublish) {
     Start-Sleep -Seconds 1
     $snapshot = Get-AgentBrowser
 
-    $ref = Find-Ref 'button "发布" \[ref=(\w+)\]' $snapshot
+    $ref = Find-Ref 'button[^[]*发布[^[]*\[ref=(\w+)\]' $snapshot
     if ($ref) {
-        agent-browser --cdp $CDP_PORT click $ref 2>&1 | Out-Null
+        $refArg = "@" + $ref
+        agent-browser --cdp $CDP_PORT click $refArg 2>&1 | Out-Null
         Write-Host "    [v] 已点击发布！" -ForegroundColor Green
     } else {
         Write-Host "    [!] 未找到发布按钮，请手动发布" -ForegroundColor Yellow
