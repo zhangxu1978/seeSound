@@ -35,6 +35,42 @@ let subtitleSettings = {
 let subtitleCanvas, subtitleCtx;
 let subtitleDragOffset = { x: 0, y: 0 };
 let isSubtitleDragging = false;
+let loadedFonts = new Set();
+
+const FONT_LIST = [
+    '杨任东竹石体-Regular.ttf',
+    '站酷快乐体2016修订版.ttf',
+    '手书体.ttf',
+    '濑户字体setofont.ttf',
+    '优设标题黑.ttf',
+    '包图小白体.ttf',
+    '庞门正道粗书体-正式版.ttf',
+    'ZCOOL Addict Italic 01.ttf',
+    'SetoFont-1.ttf',
+    '胡晓波骚包体.otf'
+];
+
+async function loadSubtitleFont(fontFamily) {
+    if (loadedFonts.has(fontFamily)) {
+        return;
+    }
+
+    try {
+        const fontPath = `/font/${fontFamily}`;
+        const font = new FontFace('subtitle-font', `url(${fontPath})`);
+        await font.load();
+        document.fonts.add(font);
+        loadedFonts.add(fontFamily);
+        console.log(`字体加载成功: ${fontFamily}`);
+    } catch (err) {
+        console.warn(`字体加载失败: ${fontFamily}`, err);
+    }
+}
+
+async function loadAllSubtitleFonts() {
+    const promises = FONT_LIST.map(font => loadSubtitleFont(font));
+    await Promise.all(promises);
+}
 
 // 动画设置
 let effectSettings = {
@@ -98,6 +134,7 @@ async function init() {
     initParticles();
     updateSettingsVisibility();
     bindSubtitleEvents();
+    await loadAllSubtitleFonts();
     initSubtitlePreview();
 }
 
@@ -243,19 +280,25 @@ function bindSubtitleEvents() {
 
     document.getElementById('subtitleEnabled')?.addEventListener('change', (e) => {
         subtitleSettings.enabled = e.target.checked;
+        initSubtitlePreview();
     });
 
     document.getElementById('subtitleFont')?.addEventListener('change', (e) => {
         subtitleSettings.fontFamily = e.target.value;
+        loadSubtitleFont(subtitleSettings.fontFamily).then(() => {
+            initSubtitlePreview();
+        });
     });
 
     document.getElementById('subtitleFontSize')?.addEventListener('input', (e) => {
         subtitleSettings.fontSize = parseInt(e.target.value);
         document.getElementById('subtitleFontSizeValue').textContent = e.target.value;
+        initSubtitlePreview();
     });
 
     document.getElementById('subtitleEffect')?.addEventListener('change', (e) => {
         subtitleSettings.effect = e.target.value;
+        initSubtitlePreview();
     });
 
     document.getElementById('subtitleStrokeWidth')?.addEventListener('input', (e) => {
@@ -352,7 +395,8 @@ function initSubtitlePreview() {
     subtitleCtx.fillRect(0, 0, subtitleCanvas.width, subtitleCanvas.height);
 
     const demoLines = ['上一行动歌词', '▶ 正在演唱的歌词', '下一行动歌词'];
-    drawSubtitleText(subtitleCtx, demoLines.join('\n'), subtitleCanvas.width / 2, subtitleCanvas.height / 2 + 12, subtitleSettings.fontSize * 0.5, true);
+    const previewFontSize = Math.min(subtitleSettings.fontSize * 0.5, 24);
+    drawSubtitleText(subtitleCtx, demoLines.join('\n'), subtitleCanvas.width / 2, subtitleCanvas.height / 2 + 12, previewFontSize, true);
 }
 
 function getCurrentSubtitle(currentTime) {
@@ -400,8 +444,23 @@ function drawSubtitles(ctx, width, height, currentTime, energy) {
     }
 }
 
-function drawSubtitleText(ctx, text, x, y, fontSize, isPreview = false) {
+function isCustomFont(fontFamily) {
+    return fontFamily.endsWith('.ttf') || fontFamily.endsWith('.otf');
+}
+
+function getSubtitleFontFamily() {
     const fontFamily = subtitleSettings.fontFamily;
+    if (!fontFamily) return 'sans-serif';
+    
+    if (isCustomFont(fontFamily)) {
+        return loadedFonts.has(fontFamily) ? 'subtitle-font' : 'sans-serif';
+    }
+    
+    return fontFamily;
+}
+
+function drawSubtitleText(ctx, text, x, y, fontSize, isPreview = false) {
+    const fontFamily = getSubtitleFontFamily();
     ctx.font = `${fontSize}px "${fontFamily}", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -468,7 +527,7 @@ function drawKaraokeSubtitles(ctx, subData, x, y, fontSize, currentTime) {
     const chars = text.split('');
     const highlightIndex = Math.floor(chars.length * progress);
 
-    ctx.font = `${fontSize}px "${subtitleSettings.fontFamily}", sans-serif`;
+    ctx.font = `${fontSize}px "${getSubtitleFontFamily()}", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -522,7 +581,7 @@ function drawPopSubtitles(ctx, subData, x, y, fontSize, currentTime) {
     ctx.scale(scale, scale);
 
     const text = subData.current.text;
-    ctx.font = `${fontSize}px "${subtitleSettings.fontFamily}", sans-serif`;
+    ctx.font = `${fontSize}px "${getSubtitleFontFamily()}", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 

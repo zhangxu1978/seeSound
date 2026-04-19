@@ -215,16 +215,23 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
 
     // 注册字幕字体
     let subtitleSettings = settings.subtitle;
-    if (subtitleSettings) {
-        try {
-            const fontPath = path.join(__dirname, 'font', subtitleSettings.fontFamily);
-            if (fs.existsSync(fontPath)) {
-                const { registerFont } = require('canvas');
-                registerFont(fontPath, { family: subtitleSettings.fontFamily.replace('.ttf', '').replace('.otf', '') });
-                console.log(`[${taskId}] ✅ 字幕字体注册成功: ${subtitleSettings.fontFamily}`);
+    if (subtitleSettings && subtitleSettings.fontFamily) {
+        const fontFamily = subtitleSettings.fontFamily;
+        const isCustomFont = fontFamily.endsWith('.ttf') || fontFamily.endsWith('.otf');
+        
+        if (isCustomFont) {
+            try {
+                const fontPath = path.join(__dirname, 'font', fontFamily);
+                if (fs.existsSync(fontPath)) {
+                    const { registerFont } = require('canvas');
+                    registerFont(fontPath, { family: fontFamily.replace('.ttf', '').replace('.otf', '') });
+                    console.log(`[${taskId}] ✅ 字幕字体注册成功: ${fontFamily}`);
+                }
+            } catch (err) {
+                console.warn(`[${taskId}] ⚠️ 字幕字体注册失败:`, err.message);
             }
-        } catch (err) {
-            console.warn(`[${taskId}] ⚠️ 字幕字体注册失败:`, err.message);
+        } else {
+            console.log(`[${taskId}] ℹ️ 使用系统字体: ${fontFamily}`);
         }
     }
 
