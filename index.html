@@ -502,6 +502,10 @@
                 <div style="font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 8px;">
                     💡 上传背景图后，将使用背景图替代视频画面输出
                 </div>
+
+                <button class="btn-secondary" id="subtitleBtn" style="margin-top: 12px; width: 100%;">
+                    📝 字幕控制
+                </button>
             </div>
 
             <!-- 动画效果 -->
@@ -792,6 +796,107 @@
 
     <video id="videoElement" class="hidden-video" crossorigin="anonymous"></video>
     <audio id="audioElement" class="hidden-video" crossorigin="anonymous"></audio>
+
+    <div id="subtitleModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+        <div class="modal-content" style="background: #121225; border-radius: 12px; padding: 24px; width: 500px; max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="font-size: 18px; margin: 0;">📝 字幕控制</h2>
+                <button id="closeSubtitleModal" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;">&times;</button>
+            </div>
+
+            <div class="setting-row" style="margin-bottom: 16px;">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="subtitleEnabled">
+                    启用字幕
+                </label>
+            </div>
+
+            <div class="group-title">字幕文件</div>
+            <div class="file-upload" id="srtUpload" style="padding: 15px;">
+                <input type="file" id="srtFile" accept=".srt">
+                <div class="file-upload-text">点击上传 SRT 字幕文件</div>
+            </div>
+            <div class="file-info" id="srtFileInfo" style="display: none; margin-top: 8px;">
+                <div id="srtFilename" style="color: #fff; margin-bottom: 4px;"></div>
+            </div>
+
+            <div class="group-title">字体设置</div>
+            <div class="setting-row">
+                <span class="setting-label">选择字体</span>
+                <select id="subtitleFont" style="min-width: 200px;">
+                    <option value="杨任东竹石体-Regular.ttf">杨任东竹石体-常规</option>
+                    <option value="站酷快乐体2016修订版.ttf">站酷快乐体</option>
+                    <option value="手书体.ttf">手书体</option>
+                    <option value="濑户字体setofont.ttf">濑户字体</option>
+                    <option value="优设标题黑.ttf">优设标题黑</option>
+                    <option value="包图小白体.ttf">包图小白体</option>
+                    <option value="庞门正道粗书体-正式版.ttf">庞门正道粗书体</option>
+                    <option value="ZCOOL Addict Italic 01.ttf">ZCOOL英文艺术体</option>
+                    <option value="SetoFont-1.ttf">SetoFont</option>
+                    <option value="胡晓波骚包体.otf">胡晓波骚包体</option>
+                </select>
+            </div>
+
+            <div class="setting-row">
+                <span class="setting-label">字体大小</span>
+                <div class="setting-control">
+                    <input type="range" id="subtitleFontSize" min="18" max="72" step="2" value="36">
+                    <span class="value-display" id="subtitleFontSizeValue">36</span>
+                </div>
+            </div>
+
+            <div class="setting-row">
+                <span class="setting-label">字幕颜色</span>
+                <div class="color-picker">
+                    <div class="color-option active" style="background: #ffffff" data-subcolor="#ffffff"></div>
+                    <div class="color-option" style="background: #ffff00" data-subcolor="#ffff00"></div>
+                    <div class="color-option" style="background: #00ff00" data-subcolor="#00ff00"></div>
+                    <div class="color-option" style="background: #00ffff" data-subcolor="#00ffff"></div>
+                    <div class="color-option" style="background: #ff00ff" data-subcolor="#ff00ff"></div>
+                    <div class="color-option" style="background: #ff6600" data-subcolor="#ff6600"></div>
+                </div>
+            </div>
+
+            <div class="group-title">特效设置</div>
+            <div class="setting-row">
+                <span class="setting-label">特效类型</span>
+                <select id="subtitleEffect">
+                    <option value="scrolling">滚动显示（默认）</option>
+                    <option value="fadein">逐字淡入</option>
+                    <option value="karaoke">卡拉OK效果</option>
+                    <option value="pop">弹出效果</option>
+                    <option value="typewriter">打字机效果</option>
+                </select>
+            </div>
+
+            <div class="setting-row">
+                <span class="setting-label">描边颜色</span>
+                <div class="color-picker">
+                    <div class="color-option active" style="background: #000000" data-stroke="#000000"></div>
+                    <div class="color-option" style="background: #ffffff" data-stroke="#ffffff"></div>
+                    <div class="color-option" style="background: #ff0000" data-stroke="#ff0000"></div>
+                    <div class="color-option" style="background: #0066ff" data-stroke="#0066ff"></div>
+                </div>
+            </div>
+
+            <div class="setting-row">
+                <span class="setting-label">描边宽度</span>
+                <div class="setting-control">
+                    <input type="range" id="subtitleStrokeWidth" min="0" max="6" step="1" value="2">
+                    <span class="value-display" id="subtitleStrokeWidthValue">2</span>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; padding: 12px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 8px;">📌 字幕预览（可拖动位置）</div>
+                <div id="subtitlePreview" style="position: relative; width: 100%; height: 80px; background: #0d0d1a; border-radius: 6px; overflow: hidden;">
+                    <canvas id="subtitlePreviewCanvas" width="460" height="80"></canvas>
+                </div>
+            </div>
+
+            <button id="applySubtitleBtn" class="btn-primary" style="margin-top: 20px;">应用设置</button>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>

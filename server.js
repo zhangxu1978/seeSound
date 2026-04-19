@@ -53,7 +53,8 @@ const upload = multer({
 // 多文件上传配置
 const multiUpload = upload.fields([
     { name: 'video', maxCount: 1 },
-    { name: 'bgImage', maxCount: 1 }
+    { name: 'bgImage', maxCount: 1 },
+    { name: 'subtitle', maxCount: 1 }
 ]);
 
 // 颜色主题
@@ -118,7 +119,7 @@ async function getEncoderConfig() {
 }
 
 // 生成可视化帧 - 流式处理版本，最小化内存使用
-async function generateVisualizationFrames(inputPath, settings, taskId, outputDir) {
+async function generateVisualizationFrames(inputPath, settings, taskId, outputDir, subtitleData) {
     const framesDir = path.join(outputDir, 'frames');
     fs.mkdirSync(framesDir, { recursive: true });
 
@@ -133,13 +134,13 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
     });
 
     const videoStream = metadata.streams.find(s => s.codec_type === 'video');
-    
+
     let width, height;
     if (settings.useBgImage && settings.bgImageWidth && settings.bgImageHeight) {
         width = settings.bgImageWidth;
         height = settings.bgImageHeight;
     } else {
-        width = settings.resolution === 'original' ? videoStream?.width || 1280 : 
+        width = settings.resolution === 'original' ? videoStream?.width || 1280 :
                 settings.resolution === '1080' ? 1920 :
                 settings.resolution === '720' ? 1280 : 854;
         height = settings.resolution === 'original' ? videoStream?.height || 720 :
@@ -153,7 +154,7 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
     // 分析音频数据 - 流式处理
     const task = exportTasks.get(taskId);
     task.message = '正在分析音频...';
-    
+
     const analyzer = new AudioAnalyzer();
     console.log(`[${taskId}] 🎵 提取音频数据...`);
     // 只提取音频数据，不预计算所有帧
@@ -164,14 +165,14 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
         console.warn(`[${taskId}] ⚠️ 音频提取失败，使用模拟数据:`, err.message);
         analyzer.duration = 60;
     }
-    
+
     const totalFrames = Math.floor(analyzer.duration * fps);
     task.metadata = { width, height, fps, duration: analyzer.duration, totalFrames };
     console.log(`[${taskId}] 🖼️ 待生成帧数: ${totalFrames}`);
 
     // 计算特效区域大小用于粒子初始化
     let overlay = settings.overlayRect;
-    
+
     // 如果没有overlayRect但有position设置，根据position计算overlayRect
     if (!overlay && settings.position) {
         const positions = {
@@ -187,7 +188,7 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
         // 默认全屏
         overlay = { x: 0, y: 0, width, height };
     }
-    
+
     const scaleFactor = settings.scaleFactor || 1;
     const canvasW = settings.canvasWidth || width;
     const canvasH = settings.canvasHeight || height;
@@ -212,9 +213,24 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
     }
     console.log(`[${taskId}] 🔧 粒子初始化: effectWidth=${effectWidth.toFixed(0)}, effectHeight=${effectHeight.toFixed(0)}`);
 
+    // 注册字幕字体
+    let subtitleSettings = settings.subtitle;
+    if (subtitleSettings) {
+        try {
+            const fontPath = path.join(__dirname, 'font', subtitleSettings.fontFamily);
+            if (fs.existsSync(fontPath)) {
+                const { registerFont } = require('canvas');
+                registerFont(fontPath, { family: subtitleSettings.fontFamily.replace('.ttf', '').replace('.otf', '') });
+                console.log(`[${taskId}] ✅ 字幕字体注册成功: ${subtitleSettings.fontFamily}`);
+            }
+        } catch (err) {
+            console.warn(`[${taskId}] ⚠️ 字幕字体注册失败:`, err.message);
+        }
+    }
+
     // 流式处理：逐帧生成，不缓存所有帧数据
     const batchSize = 30; // 增大批次，减少调度开销
-    
+
     return new Promise((resolve, reject) => {
         const processBatch = async (startIdx) => {
             try {
@@ -223,24 +239,24 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                 const ctx = canvas.getContext('2d');
 
                 const endIdx = Math.min(startIdx + batchSize, totalFrames);
-                
+
                 for (let frameIndex = startIdx; frameIndex < endIdx; frameIndex++) {
                     const time = frameIndex / fps;
                     const frameEnergy = analyzer.getSpectrumAtTime(time);
-                    
+
                     const sensitivity = settings.sensitivity || settings.sensitivvity || 1;
-                    
-                    const spectrumData = frameEnergy.spectrum && frameEnergy.spectrum.length > 0 
-                        ? frameEnergy.spectrum.slice(0, 128) 
+
+                    const spectrumData = frameEnergy.spectrum && frameEnergy.spectrum.length > 0
+                        ? frameEnergy.spectrum.slice(0, 128)
                         : new Array(128).fill(128);
-                    
+
                     // 计算与前端一致的 average 值
                     let total = 0;
                     for (let i = 0; i < spectrumData.length; i++) {
                         total += spectrumData[i];
                     }
                     const average = (total / spectrumData.length / 255) * sensitivity;
-                    
+
                     const energy = {
                         bass: frameEnergy.bass * sensitivity,
                         mid: frameEnergy.mid * sensitivity,
@@ -248,7 +264,7 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                         average: average,
                         spectrum: spectrumData
                     };
-                    
+
                     // 第一帧输出能量值用于调试
                     if (frameIndex === 0) {
                         console.log(`[${taskId}] 🎨 能量数据: bass=${energy.bass.toFixed(2)}, mid=${energy.mid.toFixed(2)}, treble=${energy.treble.toFixed(2)}`);
@@ -266,14 +282,14 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                     const canvasH = settings.canvasHeight || height;
                     const exportScaleX = width / canvasW;
                     const exportScaleY = height / canvasH;
-                    
+
                     // 只在第一帧输出调试信息
                     if (frameIndex === 0) {
                         console.log(`[${taskId}] 🔧 叠加层设置: x=${overlay.x}, y=${overlay.y}, w=${overlay.width}, h=${overlay.height}`);
                         console.log(`[${taskId}] 🔧 videoCanvas尺寸: ${canvasW}x${canvasH}, 导出尺寸: ${width}x${height}`);
                         console.log(`[${taskId}] 🔧 scaleFactor=${scaleFactor}, exportScale=${exportScaleX}x${exportScaleY}`);
                     }
-                    
+
                     // 直接使用计算好的overlay坐标
                     const overlayX = overlay.x;
                     const overlayY = overlay.y;
@@ -288,7 +304,7 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
 
                     // 绘制特效 - 只绘制在叠加层区域内
                     const theme = colorThemes[settings.colors] || colorThemes.purple;
-                    
+
                     // 第一帧输出调试信息
                     if (frameIndex === 0) {
                         console.log(`[${taskId}] 🔍 settings.type = "${settings.type}"`);
@@ -298,18 +314,23 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                         console.log(`[${taskId}] 🎨 能量数据: bass=${energy.bass.toFixed(2)}, mid=${energy.mid.toFixed(2)}, treble=${energy.treble.toFixed(2)}`);
                         console.log(`[${taskId}] 🎨 特效区域: x=${overlayX}, y=${overlayY}, w=${overlayW}, h=${overlayH}`);
                     }
-                    
+
                     // 传递 taskId 到 settings，确保每个任务有独立的历史数据
                     const settingsWithTaskId = { ...settings, taskId };
                     drawEffect(ctx, overlayX, overlayY, overlayW, overlayH, energy, time, theme, settings.type, particles, settingsWithTaskId);
 
                     ctx.restore();
 
+                    // 绘制字幕
+                    if (subtitleSettings && subtitleData && subtitleData.length > 0) {
+                        drawServerSubtitles(ctx, width, height, time, subtitleSettings, subtitleData);
+                    }
+
                     // 保存帧 - 使用 PNG 保留透明通道
                     const buffer = canvas.toBuffer('image/png');
                     const framePath = path.join(framesDir, `frame_${frameIndex.toString().padStart(6, '0')}.png`);
                     fs.writeFileSync(framePath, buffer);
-                    
+
                     // 更新进度
                     if (frameIndex % 30 === 0 || frameIndex === totalFrames - 1) {
                         const progress = Math.floor((frameIndex / totalFrames) * 50);
@@ -318,11 +339,11 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
                         console.log(`[${taskId}] 📝 帧生成进度: ${frameIndex}/${totalFrames} (${progress}%)`);
                     }
                 }
-                
+
                 // 释放 canvas 引用
                 canvas.width = 0;
                 canvas.height = 0;
-                
+
                 // 处理下一批或完成
                 if (endIdx < totalFrames) {
                     // 给事件循环喘息机会
@@ -741,9 +762,9 @@ function drawCircular(ctx, x, y, w, h, energy, time, theme, settings) {
     const sensitivity = settings.sensitivity || 1;
     const radius = Math.min(w, h) * 0.35;
     const bars = 60;
-    
-    const spectrumData = energy.spectrum && energy.spectrum.length > 0 
-        ? energy.spectrum 
+
+    const spectrumData = energy.spectrum && energy.spectrum.length > 0
+        ? energy.spectrum
         : new Array(64).fill(128);
 
     ctx.beginPath();
@@ -764,7 +785,7 @@ function drawCircular(ctx, x, y, w, h, energy, time, theme, settings) {
         }
     }
     ctx.closePath();
-    
+
     const hue = (theme.hue + time * 30) % 360;
     ctx.strokeStyle = `hsl(${hue}, ${theme.sat}%, ${theme.light}%)`;
     ctx.lineWidth = 3;
@@ -779,6 +800,229 @@ function drawCircular(ctx, x, y, w, h, energy, time, theme, settings) {
     ctx.fill();
 
     ctx.shadowBlur = 0;
+}
+
+// 解析SRT字幕
+function parseSRT(content) {
+    const subtitles = [];
+    const blocks = content.trim().split(/\n\s*\n/);
+
+    for (const block of blocks) {
+        const lines = block.split('\n');
+        if (lines.length < 3) continue;
+
+        const indexLine = lines[0].trim();
+        const timeLine = lines[1].trim();
+        const textLines = lines.slice(2);
+
+        const index = parseInt(indexLine);
+        if (isNaN(index)) continue;
+
+        const timeMatch = timeLine.match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/);
+        if (!timeMatch) continue;
+
+        const startTime = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]) + parseInt(timeMatch[4]) / 1000;
+        const endTime = parseInt(timeMatch[5]) * 3600 + parseInt(timeMatch[6]) * 60 + parseInt(timeMatch[7]) + parseInt(timeMatch[8]) / 1000;
+        const text = textLines.join('\n').replace(/<[^>]+>/g, '').trim();
+
+        subtitles.push({ index, startTime, endTime, text });
+    }
+
+    return subtitles.sort((a, b) => a.startTime - b.startTime);
+}
+
+// 获取当前字幕
+function getCurrentSubtitleServer(currentTime, subtitles) {
+    if (!subtitles || subtitles.length === 0) return null;
+
+    for (let i = 0; i < subtitles.length; i++) {
+        const sub = subtitles[i];
+        if (currentTime >= sub.startTime && currentTime <= sub.endTime) {
+            const prevSub = i > 0 ? subtitles[i - 1] : null;
+            const nextSub = i < subtitles.length - 1 ? subtitles[i + 1] : null;
+            return { current: sub, prev: prevSub, next: nextSub, index: i };
+        }
+    }
+    return null;
+}
+
+// 绘制字幕
+function drawServerSubtitles(ctx, width, height, currentTime, subtitleSettings, subtitles) {
+    const subData = getCurrentSubtitleServer(currentTime, subtitles);
+    if (!subData) return;
+
+    const fontSize = subtitleSettings.fontSize || 36;
+    const posX = width * (subtitleSettings.position?.x || 0.5);
+    const posY = height * (subtitleSettings.position?.y || 0.85);
+    const color = subtitleSettings.color || '#ffffff';
+    const strokeColor = subtitleSettings.strokeColor || '#000000';
+    const strokeWidth = subtitleSettings.strokeWidth || 2;
+    const effect = subtitleSettings.effect || 'scrolling';
+    const fontFamily = subtitleSettings.fontFamily?.replace('.ttf', '').replace('.otf', '') || 'sans-serif';
+
+    ctx.font = `${fontSize}px "${fontFamily}", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    switch (effect) {
+        case 'scrolling':
+            drawServerScrollingSubtitles(ctx, subData, posX, posY, fontSize, color, strokeColor, strokeWidth);
+            break;
+        case 'fadein':
+            drawServerFadeinSubtitles(ctx, subData, posX, posY, fontSize, currentTime, color, strokeColor, strokeWidth);
+            break;
+        case 'karaoke':
+            drawServerKaraokeSubtitles(ctx, subData, posX, posY, fontSize, currentTime, color, strokeColor, strokeWidth);
+            break;
+        case 'pop':
+            drawServerPopSubtitles(ctx, subData, posX, posY, fontSize, currentTime, color, strokeColor, strokeWidth);
+            break;
+        case 'typewriter':
+            drawServerTypewriterSubtitles(ctx, subData, posX, posY, fontSize, currentTime, color, strokeColor, strokeWidth);
+            break;
+        default:
+            drawServerScrollingSubtitles(ctx, subData, posX, posY, fontSize, color, strokeColor, strokeWidth);
+    }
+}
+
+function drawServerSubtitleText(ctx, text, x, y, fontSize, color, strokeColor, strokeWidth) {
+    if (strokeWidth > 0) {
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = strokeWidth * 2;
+        ctx.lineJoin = 'round';
+        ctx.strokeText(text, x, y);
+    }
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+}
+
+function drawServerScrollingSubtitles(ctx, subData, x, y, fontSize, color, strokeColor, strokeWidth) {
+    const lineHeight = fontSize * 1.5;
+    const startY = y - lineHeight;
+
+    ctx.globalAlpha = 0.5;
+    if (subData.prev) {
+        drawServerSubtitleText(ctx, subData.prev.text, x, startY, fontSize * 0.8, color, strokeColor, strokeWidth);
+    }
+
+    ctx.globalAlpha = 1.0;
+    drawServerSubtitleText(ctx, '▶ ' + subData.current.text, x, startY + lineHeight, fontSize, color, strokeColor, strokeWidth);
+
+    ctx.globalAlpha = 0.5;
+    if (subData.next) {
+        drawServerSubtitleText(ctx, subData.next.text, x, startY + lineHeight * 2, fontSize * 0.8, color, strokeColor, strokeWidth);
+    }
+
+    ctx.globalAlpha = 1.0;
+}
+
+function drawServerFadeinSubtitles(ctx, subData, x, y, fontSize, currentTime, color, strokeColor, strokeWidth) {
+    const duration = subData.current.endTime - subData.current.startTime;
+    const elapsed = currentTime - subData.current.startTime;
+    const progress = Math.min(1, elapsed / duration);
+
+    const chars = subData.current.text.split('');
+    const visibleChars = Math.floor(chars.length * progress);
+
+    ctx.globalAlpha = 0.3 + progress * 0.7;
+    const text = chars.slice(0, visibleChars).join('');
+    drawServerSubtitleText(ctx, text, x, y, fontSize, color, strokeColor, strokeWidth);
+    ctx.globalAlpha = 1.0;
+}
+
+function drawServerKaraokeSubtitles(ctx, subData, x, y, fontSize, currentTime, color, strokeColor, strokeWidth) {
+    const duration = subData.current.endTime - subData.current.startTime;
+    const elapsed = currentTime - subData.current.startTime;
+    const progress = Math.min(1, elapsed / duration);
+
+    const text = subData.current.text;
+    const chars = text.split('');
+    const highlightIndex = Math.floor(chars.length * progress);
+
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    let offsetX = -ctx.measureText(text).width / 2;
+
+    for (let i = 0; i < chars.length; i++) {
+        const char = chars[i];
+        const charWidth = ctx.measureText(char).width;
+
+        if (i < highlightIndex) {
+            ctx.fillStyle = '#ffdd00';
+            if (strokeWidth > 0) {
+                ctx.strokeStyle = '#ff8800';
+                ctx.lineWidth = strokeWidth * 2;
+                ctx.strokeText(char, x + offsetX + charWidth / 2, y);
+            }
+            ctx.fillText(char, x + offsetX + charWidth / 2, y);
+        } else {
+            ctx.fillStyle = color;
+            if (strokeWidth > 0) {
+                ctx.strokeStyle = strokeColor;
+                ctx.lineWidth = strokeWidth * 2;
+                ctx.strokeText(char, x + offsetX + charWidth / 2, y);
+            }
+            ctx.fillText(char, x + offsetX + charWidth / 2, y);
+        }
+
+        offsetX += charWidth;
+    }
+}
+
+function drawServerPopSubtitles(ctx, subData, x, y, fontSize, currentTime, color, strokeColor, strokeWidth) {
+    const duration = subData.current.endTime - subData.current.startTime;
+    const elapsed = currentTime - subData.current.startTime;
+    const progress = Math.min(1, elapsed / duration);
+
+    let scale = 1;
+    let alpha = 1;
+
+    if (progress < 0.1) {
+        scale = 0.5 + progress * 5;
+        alpha = progress * 10;
+    } else if (progress > 0.8) {
+        alpha = (1 - progress) * 5;
+    }
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    const text = subData.current.text;
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (strokeWidth > 0) {
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = strokeWidth * 2;
+        ctx.lineJoin = 'round';
+        ctx.strokeText(text, 0, 0);
+    }
+
+    ctx.fillStyle = color;
+    ctx.fillText(text, 0, 0);
+
+    ctx.restore();
+}
+
+function drawServerTypewriterSubtitles(ctx, subData, x, y, fontSize, currentTime, color, strokeColor, strokeWidth) {
+    const duration = subData.current.endTime - subData.current.startTime;
+    const elapsed = currentTime - subData.current.startTime;
+    const progress = Math.min(1, elapsed / duration);
+
+    const chars = subData.current.text.split('');
+    const visibleChars = Math.floor(chars.length * progress);
+    let text = chars.slice(0, visibleChars).join('');
+
+    if (visibleChars < chars.length && Math.floor(currentTime * 10) % 2 === 0) {
+        text += '▌';
+    }
+
+    drawServerSubtitleText(ctx, text, x, y, fontSize, color, strokeColor, strokeWidth);
 }
 
 // 合并视频和特效 - 使用 overlay 将特效帧叠加到原视频上
@@ -946,6 +1190,7 @@ app.post('/api/export', multiUpload, async (req, res) => {
     try {
         const videoFile = req.files?.video?.[0];
         const bgImageFile = req.files?.bgImage?.[0];
+        const subtitleFile = req.files?.subtitle?.[0];
 
         if (!videoFile) {
             return res.status(400).json({ error: '没有上传视频文件' });
@@ -956,12 +1201,27 @@ app.post('/api/export', multiUpload, async (req, res) => {
         if (bgImageFile) {
             console.log(`🖼️  背景图: ${bgImageFile.originalname}`);
         }
+        if (subtitleFile) {
+            console.log(`📝 字幕文件: ${subtitleFile.originalname}`);
+        }
 
         const settings = JSON.parse(req.body.settings || '{}');
         console.log(`⚙️  设置: ${JSON.stringify(settings)}`);
-        
+
         if (settings.bgImageWidth && settings.bgImageHeight) {
             console.log(`🖼️  背景图尺寸: ${settings.bgImageWidth}x${settings.bgImageHeight}`);
+        }
+
+        // 解析字幕文件
+        let subtitleData = null;
+        if (subtitleFile && settings.subtitle) {
+            try {
+                const srtContent = fs.readFileSync(subtitleFile.path, 'utf8');
+                subtitleData = parseSRT(srtContent);
+                console.log(`📝 字幕解析完成，共 ${subtitleData.length} 条字幕`);
+            } catch (err) {
+                console.warn(`📝 字幕解析失败:`, err.message);
+            }
         }
 
         const taskId = uuidv4();
@@ -978,6 +1238,7 @@ app.post('/api/export', multiUpload, async (req, res) => {
             message: '开始处理...',
             inputPath: videoFile.path,
             bgImagePath: bgImageFile ? bgImageFile.path : null,
+            subtitlePath: subtitleFile ? subtitleFile.path : null,
             outputDir,
             settings
         });
@@ -988,12 +1249,12 @@ app.post('/api/export', multiUpload, async (req, res) => {
         setImmediate(async () => {
             try {
                 const task = exportTasks.get(taskId);
-                
+
                 // 1. 生成可视化帧（透明背景）
                 console.log(`\n[${taskId}] 🎨 开始生成可视化帧...`);
                 task.message = '生成可视化帧...';
                 const { framesDir, fps, width, height } = await generateVisualizationFrames(
-                    videoFile.path, settings, taskId, outputDir
+                    videoFile.path, settings, taskId, outputDir, subtitleData
                 );
                 console.log(`[${taskId}] ✅ 可视化帧生成完成 (${width}x${height} @ ${fps}fps)`);
 
@@ -1014,13 +1275,16 @@ app.post('/api/export', multiUpload, async (req, res) => {
                 // 3. 清理临时文件
                 task.outputPath = outputPath;
                 task.outputUrl = `/exports/${outputFilename}`;
-                
+
                 console.log(`[${taskId}] 🧹 清理临时文件...`);
                 // 清理
                 fs.rmSync(outputDir, { recursive: true, force: true });
                 fs.unlinkSync(videoFile.path);
                 if (task.bgImagePath) {
                     fs.unlinkSync(task.bgImagePath);
+                }
+                if (task.subtitlePath) {
+                    fs.unlinkSync(task.subtitlePath);
                 }
                 console.log(`[${taskId}] ✅ 导出完成! 输出: ${outputFilename}`);
                 console.log(`[${taskId}] ========== 导出任务结束 ==========\n`);

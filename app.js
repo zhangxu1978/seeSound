@@ -18,6 +18,24 @@ let bgImage = null;
 let bgImageFile = null;
 let useBgImage = false;
 
+// 字幕相关
+let subtitleSettings = {
+    enabled: false,
+    srtFile: null,
+    subtitles: [],
+    fontFamily: '杨任东竹石体-Regular.ttf',
+    fontSize: 36,
+    color: '#ffffff',
+    strokeColor: '#000000',
+    strokeWidth: 2,
+    effect: 'scrolling',
+    position: { x: 0.5, y: 0.85 }
+};
+
+let subtitleCanvas, subtitleCtx;
+let subtitleDragOffset = { x: 0, y: 0 };
+let isSubtitleDragging = false;
+
 // 动画设置
 let effectSettings = {
     type: 'particles',
@@ -69,11 +87,18 @@ async function init() {
     videoElement = document.getElementById('videoElement');
     audioElement = document.getElementById('audioElement');
 
+    subtitleCanvas = document.getElementById('subtitlePreviewCanvas');
+    if (subtitleCanvas) {
+        subtitleCtx = subtitleCanvas.getContext('2d');
+    }
+
     await loadConfig();
     bindEvents();
     setupDragResize();
     initParticles();
     updateSettingsVisibility();
+    bindSubtitleEvents();
+    initSubtitlePreview();
 }
 
 async function loadConfig() {
@@ -180,6 +205,354 @@ function bindSlider(id, valueId, settingKey, isInt = false) {
         effectSettings[settingKey] = value;
         display.textContent = value;
     });
+}
+
+// 字幕事件绑定
+function bindSubtitleEvents() {
+    const modal = document.getElementById('subtitleModal');
+    const subtitleBtn = document.getElementById('subtitleBtn');
+    const closeBtn = document.getElementById('closeSubtitleModal');
+    const applyBtn = document.getElementById('applySubtitleBtn');
+
+    if (subtitleBtn) {
+        subtitleBtn.addEventListener('click', () => {
+            modal.style.display = 'flex';
+        });
+    }
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+    }
+
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    }
+
+    if (applyBtn) {
+        applyBtn.addEventListener('click', () => {
+            applySubtitleSettings();
+            modal.style.display = 'none';
+        });
+    }
+
+    document.getElementById('subtitleEnabled')?.addEventListener('change', (e) => {
+        subtitleSettings.enabled = e.target.checked;
+    });
+
+    document.getElementById('subtitleFont')?.addEventListener('change', (e) => {
+        subtitleSettings.fontFamily = e.target.value;
+    });
+
+    document.getElementById('subtitleFontSize')?.addEventListener('input', (e) => {
+        subtitleSettings.fontSize = parseInt(e.target.value);
+        document.getElementById('subtitleFontSizeValue').textContent = e.target.value;
+    });
+
+    document.getElementById('subtitleEffect')?.addEventListener('change', (e) => {
+        subtitleSettings.effect = e.target.value;
+    });
+
+    document.getElementById('subtitleStrokeWidth')?.addEventListener('input', (e) => {
+        subtitleSettings.strokeWidth = parseInt(e.target.value);
+        document.getElementById('subtitleStrokeWidthValue').textContent = e.target.value;
+    });
+
+    document.querySelectorAll('.color-option[data-subcolor]').forEach(opt => {
+        opt.addEventListener('click', () => {
+            document.querySelectorAll('.color-option[data-subcolor]').forEach(o => o.classList.remove('active'));
+            opt.classList.add('active');
+            subtitleSettings.color = opt.dataset.subcolor;
+        });
+    });
+
+    document.querySelectorAll('.color-option[data-stroke]').forEach(opt => {
+        opt.addEventListener('click', () => {
+            document.querySelectorAll('.color-option[data-stroke]').forEach(o => o.classList.remove('active'));
+            opt.classList.add('active');
+            subtitleSettings.strokeColor = opt.dataset.stroke;
+        });
+    });
+
+    document.getElementById('srtUpload')?.addEventListener('click', () => {
+        document.getElementById('srtFile').click();
+    });
+
+    document.getElementById('srtFile')?.addEventListener('change', handleSrtFileSelect);
+}
+
+function handleSrtFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    subtitleSettings.srtFile = file;
+    document.getElementById('srtFilename').textContent = file.name;
+    document.getElementById('srtFileInfo').style.display = 'block';
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        subtitleSettings.subtitles = parseSRT(event.target.result);
+        console.log('字幕加载成功，共', subtitleSettings.subtitles.length, '条');
+        initSubtitlePreview();
+    };
+    reader.readAsText(file);
+}
+
+function parseSRT(content) {
+    const subtitles = [];
+    const blocks = content.trim().split(/\n\s*\n/);
+
+    for (const block of blocks) {
+        const lines = block.split('\n');
+        if (lines.length < 3) continue;
+
+        const indexLine = lines[0].trim();
+        const timeLine = lines[1].trim();
+        const textLines = lines.slice(2);
+
+        const index = parseInt(indexLine);
+        if (isNaN(index)) continue;
+
+        const timeMatch = timeLine.match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/);
+        if (!timeMatch) continue;
+
+        const startTime = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]) + parseInt(timeMatch[4]) / 1000;
+        const endTime = parseInt(timeMatch[5]) * 3600 + parseInt(timeMatch[6]) * 60 + parseInt(timeMatch[7]) + parseInt(timeMatch[8]) / 1000;
+        const text = textLines.join('\n').replace(/<[^>]+>/g, '').trim();
+
+        subtitles.push({ index, startTime, endTime, text });
+    }
+
+    return subtitles.sort((a, b) => a.startTime - b.startTime);
+}
+
+function applySubtitleSettings() {
+    console.log('字幕设置已应用:', subtitleSettings);
+}
+
+function initSubtitlePreview() {
+    if (!subtitleCanvas || !subtitleCtx) return;
+
+    subtitleCtx.clearRect(0, 0, subtitleCanvas.width, subtitleCanvas.height);
+
+    if (!subtitleSettings.enabled || subtitleSettings.subtitles.length === 0) {
+        subtitleCtx.fillStyle = '#666';
+        subtitleCtx.font = '16px sans-serif';
+        subtitleCtx.textAlign = 'center';
+        subtitleCtx.fillText('上传字幕文件并启用后可预览', subtitleCanvas.width / 2, subtitleCanvas.height / 2);
+        return;
+    }
+
+    subtitleCtx.fillStyle = '#0d0d1a';
+    subtitleCtx.fillRect(0, 0, subtitleCanvas.width, subtitleCanvas.height);
+
+    const demoLines = ['上一行动歌词', '▶ 正在演唱的歌词', '下一行动歌词'];
+    drawSubtitleText(subtitleCtx, demoLines.join('\n'), subtitleCanvas.width / 2, subtitleCanvas.height / 2 + 12, subtitleSettings.fontSize * 0.5, true);
+}
+
+function getCurrentSubtitle(currentTime) {
+    if (!subtitleSettings.subtitles || subtitleSettings.subtitles.length === 0) return null;
+
+    for (let i = 0; i < subtitleSettings.subtitles.length; i++) {
+        const sub = subtitleSettings.subtitles[i];
+        if (currentTime >= sub.startTime && currentTime <= sub.endTime) {
+            const prevSub = i > 0 ? subtitleSettings.subtitles[i - 1] : null;
+            const nextSub = i < subtitleSettings.subtitles.length - 1 ? subtitleSettings.subtitles[i + 1] : null;
+            return { current: sub, prev: prevSub, next: nextSub, index: i };
+        }
+    }
+    return null;
+}
+
+function drawSubtitles(ctx, width, height, currentTime, energy) {
+    if (!subtitleSettings.enabled || subtitleSettings.subtitles.length === 0) return;
+
+    const subData = getCurrentSubtitle(currentTime);
+    if (!subData) return;
+
+    const fontSize = subtitleSettings.fontSize;
+    const posX = width * subtitleSettings.position.x;
+    const posY = height * subtitleSettings.position.y;
+
+    switch (subtitleSettings.effect) {
+        case 'scrolling':
+            drawScrollingSubtitles(ctx, subData, posX, posY, fontSize);
+            break;
+        case 'fadein':
+            drawFadeinSubtitles(ctx, subData, posX, posY, fontSize, currentTime);
+            break;
+        case 'karaoke':
+            drawKaraokeSubtitles(ctx, subData, posX, posY, fontSize, currentTime);
+            break;
+        case 'pop':
+            drawPopSubtitles(ctx, subData, posX, posY, fontSize, currentTime);
+            break;
+        case 'typewriter':
+            drawTypewriterSubtitles(ctx, subData, posX, posY, fontSize, currentTime);
+            break;
+        default:
+            drawScrollingSubtitles(ctx, subData, posX, posY, fontSize);
+    }
+}
+
+function drawSubtitleText(ctx, text, x, y, fontSize, isPreview = false) {
+    const fontFamily = subtitleSettings.fontFamily;
+    ctx.font = `${fontSize}px "${fontFamily}", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (subtitleSettings.strokeWidth > 0) {
+        ctx.strokeStyle = subtitleSettings.strokeColor;
+        ctx.lineWidth = subtitleSettings.strokeWidth * (isPreview ? 1 : 2);
+        ctx.lineJoin = 'round';
+        ctx.strokeText(text, x, y);
+    }
+
+    ctx.fillStyle = subtitleSettings.color;
+    ctx.fillText(text, x, y);
+}
+
+function drawScrollingSubtitles(ctx, subData, x, y, fontSize) {
+    const lines = [];
+    const prevText = subData.prev ? subData.prev.text : '';
+    const nextText = subData.next ? subData.next.text : '';
+
+    lines.push(prevText || ' ');
+    lines.push(subData.current.text);
+    lines.push(nextText || ' ');
+
+    const lineHeight = fontSize * 1.5;
+    const startY = y - lineHeight;
+
+    ctx.globalAlpha = 0.5;
+    if (prevText) {
+        drawSubtitleText(ctx, prevText, x, startY, fontSize * 0.8);
+    }
+
+    ctx.globalAlpha = 1.0;
+    drawSubtitleText(ctx, '▶ ' + subData.current.text, x, startY + lineHeight, fontSize);
+
+    ctx.globalAlpha = 0.5;
+    if (nextText) {
+        drawSubtitleText(ctx, nextText, x, startY + lineHeight * 2, fontSize * 0.8);
+    }
+
+    ctx.globalAlpha = 1.0;
+}
+
+function drawFadeinSubtitles(ctx, subData, x, y, fontSize, currentTime) {
+    const duration = subData.current.endTime - subData.current.startTime;
+    const elapsed = currentTime - subData.current.startTime;
+    const progress = Math.min(1, elapsed / duration);
+
+    const chars = subData.current.text.split('');
+    const visibleChars = Math.floor(chars.length * progress);
+
+    ctx.globalAlpha = 0.3 + progress * 0.7;
+    const text = chars.slice(0, visibleChars).join('');
+    drawSubtitleText(ctx, text, x, y, fontSize);
+    ctx.globalAlpha = 1.0;
+}
+
+function drawKaraokeSubtitles(ctx, subData, x, y, fontSize, currentTime) {
+    const duration = subData.current.endTime - subData.current.startTime;
+    const elapsed = currentTime - subData.current.startTime;
+    const progress = Math.min(1, elapsed / duration);
+
+    const text = subData.current.text;
+    const chars = text.split('');
+    const highlightIndex = Math.floor(chars.length * progress);
+
+    ctx.font = `${fontSize}px "${subtitleSettings.fontFamily}", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    let offsetX = -ctx.measureText(text).width / 2;
+    const lineHeight = fontSize * 1.2;
+
+    for (let i = 0; i < chars.length; i++) {
+        const char = chars[i];
+        const charWidth = ctx.measureText(char).width;
+
+        if (i < highlightIndex) {
+            ctx.fillStyle = '#ffdd00';
+            if (subtitleSettings.strokeWidth > 0) {
+                ctx.strokeStyle = '#ff8800';
+                ctx.lineWidth = subtitleSettings.strokeWidth * 2;
+                ctx.strokeText(char, x + offsetX + charWidth / 2, y);
+            }
+            ctx.fillText(char, x + offsetX + charWidth / 2, y);
+        } else {
+            ctx.fillStyle = subtitleSettings.color;
+            if (subtitleSettings.strokeWidth > 0) {
+                ctx.strokeStyle = subtitleSettings.strokeColor;
+                ctx.lineWidth = subtitleSettings.strokeWidth * 2;
+                ctx.strokeText(char, x + offsetX + charWidth / 2, y);
+            }
+            ctx.fillText(char, x + offsetX + charWidth / 2, y);
+        }
+
+        offsetX += charWidth;
+    }
+}
+
+function drawPopSubtitles(ctx, subData, x, y, fontSize, currentTime) {
+    const duration = subData.current.endTime - subData.current.startTime;
+    const elapsed = currentTime - subData.current.startTime;
+    const progress = Math.min(1, elapsed / duration);
+
+    let scale = 1;
+    let alpha = 1;
+
+    if (progress < 0.1) {
+        scale = 0.5 + progress * 5;
+        alpha = progress * 10;
+    } else if (progress > 0.8) {
+        alpha = (1 - progress) * 5;
+    }
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    const text = subData.current.text;
+    ctx.font = `${fontSize}px "${subtitleSettings.fontFamily}", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (subtitleSettings.strokeWidth > 0) {
+        ctx.strokeStyle = subtitleSettings.strokeColor;
+        ctx.lineWidth = subtitleSettings.strokeWidth * 2;
+        ctx.lineJoin = 'round';
+        ctx.strokeText(text, 0, 0);
+    }
+
+    ctx.fillStyle = subtitleSettings.color;
+    ctx.fillText(text, 0, 0);
+
+    ctx.restore();
+}
+
+function drawTypewriterSubtitles(ctx, subData, x, y, fontSize, currentTime) {
+    const duration = subData.current.endTime - subData.current.startTime;
+    const elapsed = currentTime - subData.current.startTime;
+    const progress = Math.min(1, elapsed / duration);
+
+    const chars = subData.current.text.split('');
+    const visibleChars = Math.floor(chars.length * progress);
+    let text = chars.slice(0, visibleChars).join('');
+
+    if (visibleChars < chars.length && Math.floor(currentTime * 10) % 2 === 0) {
+        text += '▌';
+    }
+
+    drawSubtitleText(ctx, text, x, y, fontSize);
 }
 
 // 更新设置面板可见性
@@ -464,19 +837,24 @@ function drawEffectToCanvas(time) {
     // 清除
     ctx.clearRect(0, 0, w, h);
 
+    // 获取音频数据
+    if (analyser) {
+        analyser.getByteFrequencyData(dataArray);
+    }
+
     // 计算能量
     let bass = 0, mid = 0, treble = 0, total = 0;
     if (dataArray && dataArray.length > 0) {
         const bassCount = Math.floor(bufferLength * 0.2);
         const midCount = Math.floor(bufferLength * 0.5);
-        
+
         for (let i = 0; i < bufferLength; i++) {
             total += dataArray[i];
             if (i < bassCount) bass += dataArray[i];
             else if (i < midCount) mid += dataArray[i];
             else treble += dataArray[i];
         }
-        
+
         bass = bass / bassCount / 255;
         mid = mid / (midCount - bassCount) / 255;
         treble = treble / (bufferLength - midCount) / 255;
@@ -514,6 +892,11 @@ function drawEffectToCanvas(time) {
             drawParticlesUp(ctx, w, h, energy, t, theme);
             break;
     }
+
+    // 绘制字幕
+    const element = isVideo ? videoElement : audioElement;
+    const currentTime = element?.currentTime || 0;
+    drawSubtitles(ctx, w, h, currentTime, energy);
 
     ctx.restore();
 }
@@ -1247,7 +1630,16 @@ async function exportVideoServer() {
             scaleFactor: videoCanvas.width / parseInt(videoCanvas.style.width || videoCanvas.width),
             useBgImage: useBgImage,
             bgImageWidth: bgImage ? bgImage.width : null,
-            bgImageHeight: bgImage ? bgImage.height : null
+            bgImageHeight: bgImage ? bgImage.height : null,
+            subtitle: subtitleSettings.enabled ? {
+                fontFamily: subtitleSettings.fontFamily,
+                fontSize: subtitleSettings.fontSize,
+                color: subtitleSettings.color,
+                strokeColor: subtitleSettings.strokeColor,
+                strokeWidth: subtitleSettings.strokeWidth,
+                effect: subtitleSettings.effect,
+                position: subtitleSettings.position
+            } : null
         };
 
         const formData = new FormData();
@@ -1257,6 +1649,11 @@ async function exportVideoServer() {
         // 如果有背景图，也上传
         if (useBgImage && bgImageFile) {
             formData.append('bgImage', bgImageFile);
+        }
+
+        // 如果有字幕文件，也上传
+        if (subtitleSettings.enabled && subtitleSettings.srtFile) {
+            formData.append('subtitle', subtitleSettings.srtFile);
         }
 
         progressText.textContent = '正在上传...';
