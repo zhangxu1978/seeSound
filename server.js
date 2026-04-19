@@ -68,6 +68,55 @@ const colorThemes = {
     gold: { hue: 45, sat: 100, light: 60 }
 };
 
+// 检测可用的 GPU 编码器
+function detectGPUEncoder() {
+    return new Promise((resolve) => {
+        const { exec } = require('child_process');
+        
+        exec('ffmpeg -hide_banner -encoders 2>/dev/null | grep -E "h264_nvenc|h264_qsv|h264_amf|h264_videotoolbox"', (err, stdout) => {
+            if (err || !stdout) {
+                console.log('💡 未检测到 GPU 编码器，将使用 CPU 编码 (libx264)');
+                resolve({ available: false, encoder: null });
+                return;
+            }
+            
+            const encoders = stdout.toString();
+            let encoder = null;
+            let gpuType = null;
+            
+            if (encoders.includes('h264_nvenc')) {
+                encoder = 'h264_nvenc';
+                gpuType = 'NVIDIA';
+            } else if (encoders.includes('h264_qsv')) {
+                encoder = 'h264_qsv';
+                gpuType = 'Intel Quick Sync';
+            } else if (encoders.includes('h264_amf')) {
+                encoder = 'h264_amf';
+                gpuType = 'AMD';
+            } else if (encoders.includes('h264_videotoolbox')) {
+                encoder = 'h264_videotoolbox';
+                gpuType = 'Apple VideoToolbox';
+            }
+            
+            if (encoder) {
+                console.log(`🎮 检测到 GPU 加速: ${gpuType} (${encoder})`);
+                resolve({ available: true, encoder, gpuType });
+            } else {
+                console.log('💡 未检测到 GPU 编码器，将使用 CPU 编码 (libx264)');
+                resolve({ available: false, encoder: null });
+            }
+        });
+    });
+}
+
+// 获取编码器配置
+async function getEncoderConfig() {
+    if (!global.gpuEncoder) {
+        global.gpuEncoder = await detectGPUEncoder();
+    }
+    return global.gpuEncoder;
+}
+
 // 生成可视化帧 - 流式处理版本，最小化内存使用
 async function generateVisualizationFrames(inputPath, settings, taskId, outputDir) {
     const framesDir = path.join(outputDir, 'frames');
@@ -164,7 +213,7 @@ async function generateVisualizationFrames(inputPath, settings, taskId, outputDi
     console.log(`[${taskId}] 🔧 粒子初始化: effectWidth=${effectWidth.toFixed(0)}, effectHeight=${effectHeight.toFixed(0)}`);
 
     // 流式处理：逐帧生成，不缓存所有帧数据
-    const batchSize = 10; // 减小批次大小
+    const batchSize = 30; // 增大批次，减少调度开销
     
     return new Promise((resolve, reject) => {
         const processBatch = async (startIdx) => {
@@ -734,12 +783,28 @@ function drawCircular(ctx, x, y, w, h, energy, time, theme, settings) {
 
 // 合并视频和特效 - 使用 overlay 将特效帧叠加到原视频上
 async function mergeVideoWithEffect(inputPath, framesDir, fps, width, height, outputPath, taskId) {
+    const { available, encoder, gpuType } = await getEncoderConfig();
+    const useGPU = available;
+    
     return new Promise((resolve, reject) => {
         const task = exportTasks.get(taskId);
         
-        // 构建 FFmpeg 命令
-        // 输入0: 原视频, 输入1: 特效帧序列（带透明通道的PNG）
-        // 使用 overlay 滤镜将特效叠加到视频上
+        let videoOptions;
+        if (useGPU) {
+            const gpuOptions = {
+                'h264_nvenc': ['-preset p4', '-tune hq', '-cq 23'],
+                'h264_qsv': ['-preset medium', '-qscale:v 23'],
+                'h264_amf': ['-preset quality', '-qscale:v 23'],
+                'h264_videotoolbox': ['-preset quality', '-qscale:v 23']
+            };
+            videoOptions = gpuOptions[encoder] || ['-preset medium', '-crf 23'];
+            console.log(`🎮 使用 ${gpuType} GPU 加速编码`);
+            task.message = `正在使用 ${gpuType} GPU 合成视频...`;
+        } else {
+            videoOptions = ['-preset medium', '-crf 23'];
+            task.message = '正在合成视频...';
+        }
+        
         const command = ffmpeg()
             .input(inputPath)
             .input(path.join(framesDir, 'frame_%06d.png'))
@@ -748,17 +813,14 @@ async function mergeVideoWithEffect(inputPath, framesDir, fps, width, height, ou
                 '-thread_queue_size 512'
             ])
             .complexFilter([
-                // 将特效帧叠加到原视频上
-                // 格式转换确保透明度正确处理
                 '[1:v]format=rgba[fx]',
                 '[0:v][fx]overlay=0:0:format=auto:repeatlast=0[output]'
             ])
             .outputOptions([
                 '-map [output]',
-                '-map 0:a?',  // 保留原视频音频
-                '-c:v libx264',
-                '-preset medium',
-                '-crf 23',
+                '-map 0:a?',
+                `-c:v ${useGPU ? encoder : 'libx264'}`,
+                ...videoOptions,
                 '-pix_fmt yuv420p',
                 '-c:a aac',
                 '-b:a 192k',
@@ -772,7 +834,6 @@ async function mergeVideoWithEffect(inputPath, framesDir, fps, width, height, ou
         command
             .on('start', (cmd) => {
                 console.log('FFmpeg 命令:', cmd);
-                task.message = '正在合成视频...';
             })
             .on('progress', (progress) => {
                 if (progress.percent) {
@@ -800,15 +861,31 @@ async function mergeVideoWithEffect(inputPath, framesDir, fps, width, height, ou
 
 // 合并背景图、音频和特效
 async function mergeWithBackground(bgImagePath, audioPath, framesDir, fps, width, height, outputPath, taskId) {
+    const { available, encoder, gpuType } = await getEncoderConfig();
+    const useGPU = available;
+    
     return new Promise((resolve, reject) => {
         const task = exportTasks.get(taskId);
         
-        // 构建 FFmpeg 命令
-        // 输入0: 背景图, 输入1: 音频, 输入2: 特效帧序列
-        // 背景图循环播放，特效叠加，音频作为音轨
+        let videoOptions;
+        if (useGPU) {
+            const gpuOptions = {
+                'h264_nvenc': ['-preset p4', '-tune hq', '-cq 23'],
+                'h264_qsv': ['-preset medium', '-qscale:v 23'],
+                'h264_amf': ['-preset quality', '-qscale:v 23'],
+                'h264_videotoolbox': ['-preset quality', '-qscale:v 23']
+            };
+            videoOptions = gpuOptions[encoder] || ['-preset medium', '-crf 23'];
+            console.log(`🎮 使用 ${gpuType} GPU 加速编码`);
+            task.message = `正在使用 ${gpuType} GPU 合成视频...`;
+        } else {
+            videoOptions = ['-preset medium', '-crf 23'];
+            task.message = '正在合成视频（使用背景图）...';
+        }
+        
         const command = ffmpeg()
             .input(bgImagePath)
-            .inputOptions(['-loop 1'])  // 背景图循环
+            .inputOptions(['-loop 1'])
             .input(audioPath)
             .input(path.join(framesDir, 'frame_%06d.png'))
             .inputFPS(fps)
@@ -816,24 +893,20 @@ async function mergeWithBackground(bgImagePath, audioPath, framesDir, fps, width
                 '-thread_queue_size 512'
             ])
             .complexFilter([
-                // 将背景图缩放到目标尺寸
                 '[0:v]scale=' + width + ':' + height + ':force_original_aspect_ratio=decrease,pad=' + width + ':' + height + ':(ow-iw)/2:(oh-ih)/2[bg]',
-                // 特效帧格式转换
                 '[2:v]format=rgba[fx]',
-                // 特效叠加到背景图上
                 '[bg][fx]overlay=0:0:format=auto:repeatlast=0[output]'
             ])
             .outputOptions([
                 '-map [output]',
-                '-map 1:a?',  // 使用音频文件的音轨
-                '-c:v libx264',
-                '-preset medium',
-                '-crf 23',
+                '-map 1:a?',
+                `-c:v ${useGPU ? encoder : 'libx264'}`,
+                ...videoOptions,
                 '-pix_fmt yuv420p',
                 '-c:a aac',
                 '-b:a 192k',
                 '-movflags +faststart',
-                '-shortest',  // 以最短的输入为准（音频长度）
+                '-shortest',
                 '-vsync cfr'
             ])
             .output(outputPath);
@@ -841,7 +914,6 @@ async function mergeWithBackground(bgImagePath, audioPath, framesDir, fps, width
         command
             .on('start', (cmd) => {
                 console.log('FFmpeg 命令:', cmd);
-                task.message = '正在合成视频（使用背景图）...';
             })
             .on('progress', (progress) => {
                 if (progress.percent) {
@@ -1143,6 +1215,12 @@ app.post('/api/export-external', externalUpload, async (req, res) => {
 // 健康检查
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// GPU 加速状态
+app.get('/api/gpu-status', async (req, res) => {
+    const gpuInfo = await getEncoderConfig();
+    res.json(gpuInfo);
 });
 
 // 客户端配置

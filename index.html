@@ -641,7 +641,7 @@
                 </div>
 
                 <div class="group-title">波形参数</div>
-                <div class="setting-row">
+                <div class="setting-row">——
                     <span class="setting-label">振幅强度</span>
                     <div class="setting-control">
                         <input type="range" id="amplitude" min="0.1" max="3" step="0.1" value="1">
@@ -733,6 +733,13 @@
             <div class="panel-section">
                 <h3>⚙️ 导出设置</h3>
                 <div class="setting-row">
+                    <span class="setting-label">导出模式</span>
+                    <select id="exportMode">
+                        <option value="browser">🚀 浏览器录制（快速）</option>
+                        <option value="server">⚙️ 传统导出（服务器）</option>
+                    </select>
+                </div>
+                <div class="setting-row">
                     <span class="setting-label">分辨率</span>
                     <select id="resolution">
                         <option value="original">原始分辨率</option>
@@ -749,6 +756,9 @@
                         <option value="low">低</option>
                     </select>
                 </div>
+                <div style="font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 8px;">
+                    💡 浏览器录制模式可获得 5-10 倍速度提升
+                </div>
             </div>
 
             <!-- 导出按钮 -->
@@ -759,7 +769,7 @@
                 <div class="export-progress" id="exportProgress">
                     <div class="progress-text" id="progressText">准备导出...</div>
                     <div class="progress-bar-container">
-                        <div class="progress-bar-fill" id="exportProgressBar"></div>
+                        <div class="progress-bar-fill" id="progressBarFill"></div>
                     </div>
                 </div>
             </div>

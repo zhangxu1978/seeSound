@@ -400,8 +400,7 @@ function seekVideo(e) {
 // 初始化粒子
 function initParticles() {
     particles = [];
-    const count = 150;
-    
+    const count = effectSettings.particleCount || 150;
     for (let i = 0; i < count; i++) {
         particles.push({
             x: Math.random() * effectCanvas.width,
@@ -415,146 +414,150 @@ function initParticles() {
     }
 }
 
-// 获取音频能量
-function getAudioEnergy() {
-    if (!analyser) return { bass: 0, mid: 0, treble: 0, average: 0, data: new Uint8Array(128) };
-
-    analyser.getByteFrequencyData(dataArray);
-
-    let bass = 0, mid = 0, treble = 0;
-    const bassEnd = Math.floor(bufferLength * 0.1);
-    const midEnd = Math.floor(bufferLength * 0.5);
-
-    for (let i = 0; i < bassEnd; i++) bass += dataArray[i];
-    for (let i = bassEnd; i < midEnd; i++) mid += dataArray[i];
-    for (let i = midEnd; i < bufferLength; i++) treble += dataArray[i];
-
-    const sensitivity = effectSettings.sensitivity;
-    bass = (bass / bassEnd / 255) * sensitivity;
-    mid = (mid / (midEnd - bassEnd) / 255) * sensitivity;
-    treble = (treble / (bufferLength - midEnd) / 255) * sensitivity;
-
-    let average = 0;
-    for (let i = 0; i < bufferLength; i++) average += dataArray[i];
-    average = (average / bufferLength / 255) * sensitivity;
-
-    return { bass, mid, treble, average, data: dataArray };
-}
-
-// 动画循环
-function animate() {
+// 动画主循环
+let lastTime = 0;
+function animate(time = 0) {
     animationId = requestAnimationFrame(animate);
 
-    const element = isVideo ? videoElement : audioElement;
-    
-    // 绘制视频或背景
-    videoCtx.fillStyle = '#0a0a0a';
-    videoCtx.fillRect(0, 0, videoCanvas.width, videoCanvas.height);
+    // 绘制视频/背景
+    videoCtx.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
 
-    // 优先使用背景图，其次使用视频帧
-    if (useBgImage && bgImage && bgImage.complete) {
+    if (useBgImage && bgImage) {
         videoCtx.drawImage(bgImage, 0, 0, videoCanvas.width, videoCanvas.height);
-    } else if (isVideo && element.videoWidth) {
-        videoCtx.drawImage(element, 0, 0, videoCanvas.width, videoCanvas.height);
+    } else if (isVideo) {
+        try {
+            videoCtx.drawImage(videoElement, 0, 0, videoCanvas.width, videoCanvas.height);
+        } catch (e) {
+            // 视频还没准备好
+        }
+    } else {
+        // 纯音频模式，黑色背景
+        videoCtx.fillStyle = '#0d0d1a';
+        videoCtx.fillRect(0, 0, videoCanvas.width, videoCanvas.height);
     }
 
-    // 更新时间和进度
-    if (element.duration) {
-        const current = formatTime(element.currentTime);
-        const total = formatTime(element.duration);
-        document.getElementById('timeDisplay').textContent = `${current} / ${total}`;
-        document.getElementById('progressFill').style.width = 
-            (element.currentTime / element.duration * 100) + '%';
+    // 获取音频数据
+    if (analyser) {
+        analyser.getByteFrequencyData(dataArray);
     }
 
     // 绘制特效
-    const energy = getAudioEnergy();
-    const time = Date.now() * 0.001;
-    const theme = colorThemes[effectSettings.colors];
+    drawEffectToCanvas(time);
 
-    effectCtx.clearRect(0, 0, effectCanvas.width, effectCanvas.height);
-
-    // 应用变形
-    if (effectSettings.transformType !== 'none') {
-        applyTransform(effectCtx, time);
-    }
-
-    switch (effectSettings.type) {
-        case 'particles':
-            drawParticles(energy, time, theme);
-            break;
-        case 'spectrum':
-            drawSpectrum(energy, theme);
-            break;
-        case 'wave':
-            drawWave(energy, time, theme);
-            break;
-        case 'circular':
-            drawCircular(energy, time, theme);
-            break;
-        case 'particles-up':
-            drawParticlesUp(energy, time, theme);
-            break;
-    }
-
-    // 恢复上下文
-    if (effectSettings.transformType !== 'none') {
-        effectCtx.restore();
+    // 更新进度条
+    const element = isVideo ? videoElement : audioElement;
+    if (element.duration) {
+        const percent = (element.currentTime / element.duration) * 100;
+        document.getElementById('progressFill').style.width = percent + '%';
+        document.getElementById('timeDisplay').textContent = 
+            `${formatTime(element.currentTime)} / ${formatTime(element.duration)}`;
     }
 }
 
-// 应用画布变形
-function applyTransform(ctx, time) {
+// 绘制特效到画布
+function drawEffectToCanvas(time) {
+    const ctx = effectCtx;
     const w = effectCanvas.width;
     const h = effectCanvas.height;
+    const theme = colorThemes[effectSettings.colors] || colorThemes.purple;
+
+    // 清除
+    ctx.clearRect(0, 0, w, h);
+
+    // 计算能量
+    let bass = 0, mid = 0, treble = 0, total = 0;
+    if (dataArray && dataArray.length > 0) {
+        const bassCount = Math.floor(bufferLength * 0.2);
+        const midCount = Math.floor(bufferLength * 0.5);
+        
+        for (let i = 0; i < bufferLength; i++) {
+            total += dataArray[i];
+            if (i < bassCount) bass += dataArray[i];
+            else if (i < midCount) mid += dataArray[i];
+            else treble += dataArray[i];
+        }
+        
+        bass = bass / bassCount / 255;
+        mid = mid / (midCount - bassCount) / 255;
+        treble = treble / (bufferLength - midCount) / 255;
+        total = total / bufferLength / 255;
+    }
+
+    const energy = {
+        bass: bass * effectSettings.sensitivity,
+        mid: mid * effectSettings.sensitivity,
+        treble: treble * effectSettings.sensitivity,
+        average: total * effectSettings.sensitivity,
+        data: dataArray || new Uint8Array(bufferLength).fill(128)
+    };
+
+    const t = time / 1000;
+
+    // 应用变形
+    applyTransform(ctx, w, h, t, effectSettings);
+
+    // 根据类型绘制
+    switch (effectSettings.type) {
+        case 'particles':
+            drawParticles(ctx, w, h, energy, t, theme);
+            break;
+        case 'spectrum':
+            drawSpectrum(ctx, w, h, energy, theme);
+            break;
+        case 'wave':
+            drawWave(ctx, w, h, energy, t, theme);
+            break;
+        case 'circular':
+            drawCircular(ctx, w, h, energy, t, theme);
+            break;
+        case 'particles-up':
+            drawParticlesUp(ctx, w, h, energy, t, theme);
+            break;
+    }
+
+    ctx.restore();
+}
+
+// 应用画布变形
+function applyTransform(ctx, w, h, time, settings) {
     const cx = w / 2;
     const cy = h / 2;
-    const intensity = effectSettings.transformIntensity / 100;
-    const speed = effectSettings.transformSpeed;
+    const intensity = (settings.transformIntensity || 30) / 100;
+    const speed = settings.transformSpeed || 1;
+    const type = settings.transformType || 'none';
+
+    if (type === 'none') return;
 
     ctx.save();
 
-    switch (effectSettings.transformType) {
+    switch (type) {
         case 'wave':
-            // 波浪扭曲
-            const waveOffset = Math.sin(time * speed) * intensity * 50;
             ctx.translate(cx, cy);
             ctx.transform(1, 0, Math.sin(time * speed * 2) * intensity * 0.3, 1, 0, 0);
             ctx.translate(-cx, -cy);
             break;
-
         case 'spiral':
-            // 螺旋扭曲
-            const angle = time * speed * 0.5 * intensity;
             ctx.translate(cx, cy);
-            ctx.rotate(angle);
+            ctx.rotate(time * speed * 0.5 * intensity);
             ctx.scale(1 + Math.sin(time * speed) * intensity * 0.1, 1);
             ctx.translate(-cx, -cy);
             break;
-
         case 'bulge':
-            // 凸透镜效果 - 通过缩放实现
             ctx.translate(cx, cy);
             ctx.scale(1 + intensity * 0.3, 1 + intensity * 0.3);
             ctx.translate(-cx, -cy);
             break;
-
         case 'pinch':
-            // 凹透镜效果
             ctx.translate(cx, cy);
             ctx.scale(1 - intensity * 0.2, 1 - intensity * 0.2);
             ctx.translate(-cx, -cy);
             break;
-
         case 'swirl':
-            // 漩涡效果
             ctx.translate(cx, cy);
             ctx.rotate(Math.sin(time * speed) * intensity);
             ctx.translate(-cx, -cy);
             break;
-
         case 'ripple':
-            // 水波纹效果
             const scale = 1 + Math.sin(time * speed * 3) * intensity * 0.1;
             ctx.translate(cx, cy);
             ctx.scale(scale, scale);
@@ -564,76 +567,76 @@ function applyTransform(ctx, time) {
 }
 
 // 粒子效果
-function drawParticles(energy, time, theme) {
-    const centerX = effectCanvas.width / 2;
-    const centerY = effectCanvas.height / 2;
-
+function drawParticles(ctx, w, h, energy, time, theme) {
+    const sensitivity = effectSettings.sensitivity;
+    
     particles.forEach((p, i) => {
-        const speedMultiplier = 1 + energy.bass * 3;
-        p.x += p.vx * speedMultiplier;
-        p.y += p.vy * speedMultiplier;
+        const speedMult = 1 + energy.bass * 3 * sensitivity;
+        p.x += p.vx * speedMult;
+        p.y += p.vy * speedMult;
 
-        if (p.x < 0 || p.x > effectCanvas.width) p.vx *= -1;
-        if (p.y < 0 || p.y > effectCanvas.height) p.vy *= -1;
-
-        const dx = centerX - p.x;
-        const dy = centerY - p.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        
-        if (dist > 0) {
-            p.x += (dx / dist) * energy.bass * 2;
-            p.y += (dy / dist) * energy.bass * 2;
+        if (p.x < 0 || p.x > w) {
+            p.vx *= -1;
+            p.x = Math.max(0, Math.min(w, p.x));
+        }
+        if (p.y < 0 || p.y > h) {
+            p.vy *= -1;
+            p.y = Math.max(0, Math.min(h, p.y));
         }
 
-        const hue = (theme.hue + time * 30 + i * 2) % 360;
-        const size = p.size * (1 + energy.mid * 2);
+        // 粒子大小随能量变化
+        const size = p.size * (1 + energy.average);
+        const alpha = 0.6 + 0.4 * energy.average;
         
-        effectCtx.beginPath();
-        effectCtx.arc(p.x, p.y, size, 0, Math.PI * 2);
-        effectCtx.fillStyle = `hsla(${hue}, ${theme.sat}%, ${theme.light}%, ${0.5 + energy.average * 0.5})`;
-        effectCtx.fill();
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+        
+        const hue = (theme.hue + i * 3 + time * 20) % 360;
+        ctx.fillStyle = `hsla(${hue}, ${theme.sat}%, ${theme.light}%, ${alpha})`;
+        ctx.fill();
+        
+        // 发光
+        ctx.shadowBlur = size * 3 * energy.average;
+        ctx.shadowColor = ctx.fillStyle;
     });
-
-    const pulseSize = Math.min(effectCanvas.width, effectCanvas.height) * 0.1 + energy.bass * 100;
-    const gradient = effectCtx.createRadialGradient(centerX, centerY, 0, centerX, centerY, pulseSize);
-    gradient.addColorStop(0, `hsla(${theme.hue}, ${theme.sat}%, ${theme.light}%, ${energy.bass * 0.5})`);
-    gradient.addColorStop(1, 'transparent');
     
-    effectCtx.beginPath();
-    effectCtx.arc(centerX, centerY, pulseSize, 0, Math.PI * 2);
-    effectCtx.fillStyle = gradient;
-    effectCtx.fill();
+    ctx.shadowBlur = 0;
 }
 
 // 粒子上升效果
-function drawParticlesUp(energy, time, theme) {
+function drawParticlesUp(ctx, w, h, energy, time, theme) {
+    const sensitivity = effectSettings.sensitivity;
+    
     particles.forEach((p, i) => {
-        p.life += 0.01;
-        if (p.life > p.maxLife) {
-            p.life = 0;
-            p.x = Math.random() * effectCanvas.width;
-            p.y = effectCanvas.height + 10;
+        p.vy = -1 - energy.bass * 5 * sensitivity;
+        p.vx = (Math.random() - 0.5) * 0.5;
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.y < -10) {
+            p.y = h + 10;
+            p.x = Math.random() * w;
         }
 
-        const speed = (1 + energy.bass * 5) * (1 + p.size / 3);
-        p.y -= speed;
-        p.x += Math.sin(time * 3 + i) * 0.5;
-
-        const alpha = Math.sin((p.life / p.maxLife) * Math.PI) * (0.3 + energy.average * 0.7);
-        const hue = (theme.hue + p.y / effectCanvas.height * 60) % 360;
-        const size = p.size * (1 + energy.mid * 2);
-
-        effectCtx.beginPath();
-        effectCtx.arc(p.x, p.y, size, 0, Math.PI * 2);
-        effectCtx.fillStyle = `hsla(${hue}, ${theme.sat}%, ${theme.light}%, ${alpha})`;
-        effectCtx.fill();
+        const size = p.size * (1 + energy.average);
+        const alpha = 0.5 + 0.5 * (1 - p.y / h);
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+        
+        const hue = (theme.hue + i * 3 + time * 20) % 360;
+        ctx.fillStyle = `hsla(${hue}, ${theme.sat}%, ${theme.light}%, ${alpha})`;
+        ctx.fill();
+        
+        ctx.shadowBlur = size * 2 * energy.average;
+        ctx.shadowColor = ctx.fillStyle;
     });
+    
+    ctx.shadowBlur = 0;
 }
 
 // 频谱效果 - 增强版
-function drawSpectrum(energy, theme) {
-    const w = effectCanvas.width;
-    const h = effectCanvas.height;
+function drawSpectrum(ctx, w, h, energy, theme) {
     const barCount = effectSettings.barCount;
     const barWidth = effectSettings.barWidth;
     const gap = effectSettings.barGap;
@@ -667,7 +670,7 @@ function drawSpectrum(energy, theme) {
         const frequencyPos = 0.1 + distFromCenter * 0.5; // 中间对应0.1（中高频），两边对应0.6（低频）
         const dataIndex = Math.floor(frequencyPos * bufferLength);
         const value = energy.data[dataIndex] || 0;
-        
+
         // 计算能量值
         const barHeight = Math.max(10, (value / 255) * h * 0.8 * energy.average);
 
@@ -714,20 +717,20 @@ function drawSpectrum(energy, theme) {
         // 创建渐变
         let gradient;
         if (effectSettings.gradientDirection === 'vertical') {
-            gradient = effectCtx.createLinearGradient(bx, by, bx, by + bh);
+            gradient = ctx.createLinearGradient(bx, by, bx, by + bh);
         } else if (effectSettings.gradientDirection === 'horizontal') {
-            gradient = effectCtx.createLinearGradient(bx, by, bx + bw, by);
+            gradient = ctx.createLinearGradient(bx, by, bx + bw, by);
         } else {
-            gradient = effectCtx.createRadialGradient(bx + bw/2, by + bh/2, 0, bx + bw/2, by + bh/2, Math.max(bw, bh));
+            gradient = ctx.createRadialGradient(bx + bw/2, by + bh/2, 0, bx + bw/2, by + bh/2, Math.max(bw, bh));
         }
 
         gradient.addColorStop(0, `hsl(${hue}, ${theme.sat}%, ${theme.light + 20}%)`);
         gradient.addColorStop(1, `hsl(${hue}, ${theme.sat}%, ${theme.light - 20}%)`);
 
         // 绘制圆角矩形
-        effectCtx.fillStyle = gradient;
-        roundRect(effectCtx, bx, by, bw, bh, radius);
-        effectCtx.fill();
+        ctx.fillStyle = gradient;
+        roundRect(ctx, bx, by, bw, bh, radius);
+        ctx.fill();
 
         // 镜像效果
         if (mirror) {
@@ -748,8 +751,8 @@ function drawSpectrum(energy, theme) {
                     my = h - by - bh;
                     break;
             }
-            roundRect(effectCtx, mx, my, bw, bh, radius);
-            effectCtx.fill();
+            roundRect(ctx, mx, my, bw, bh, radius);
+            ctx.fill();
         }
 
         // ---- 砖块吸附逻辑（仅支持 up/down/center 方向） ----
@@ -785,9 +788,9 @@ function drawSpectrum(energy, theme) {
 
             // 绘制砖块（亮色，无渐变）
             const brickColor = `hsl(${hue}, ${theme.sat}%, ${Math.min(theme.light + 35, 95)}%)`;
-            effectCtx.fillStyle = brickColor;
-            roundRect(effectCtx, brx, bry, brickW, brickH, Math.min(2, radius));
-            effectCtx.fill();
+            ctx.fillStyle = brickColor;
+            roundRect(ctx, brx, bry, brickW, brickH, Math.min(2, radius));
+            ctx.fill();
 
             // 镜像砖块（跟随对应方向的镜像柱子）
             if (mirror) {
@@ -805,9 +808,9 @@ function drawSpectrum(energy, theme) {
                     mbrx = bx;
                     mbry = h - bry - brickH;
                 }
-                effectCtx.fillStyle = brickColor;
-                roundRect(effectCtx, mbrx, mbry, brickW, brickH, Math.min(2, radius));
-                effectCtx.fill();
+                ctx.fillStyle = brickColor;
+                roundRect(ctx, mbrx, mbry, brickW, brickH, Math.min(2, radius));
+                ctx.fill();
             }
         }
     }
@@ -826,12 +829,8 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-// 波形效果 - 增强版
-function drawWave(energy, time, theme) {
-    analyser.getByteTimeDomainData(dataArray);
-
-    const w = effectCanvas.width;
-    const h = effectCanvas.height;
+// 波形效果
+function drawWave(ctx, w, h, energy, time, theme) {
     const origin = effectSettings.waveOrigin;
     const amplitude = effectSettings.amplitude;
     const frequency = effectSettings.frequency;
@@ -874,21 +873,21 @@ function drawWave(energy, time, theme) {
         const hue = (theme.hue + line * 30 + time * 20) % 360;
         const alpha = 1 - (line * 0.2);
         
-        effectCtx.lineWidth = lineWidth - line * 0.5;
-        effectCtx.strokeStyle = `hsla(${hue}, ${theme.sat}%, ${theme.light}%, ${alpha})`;
+        ctx.lineWidth = lineWidth - line * 0.5;
+        ctx.strokeStyle = `hsla(${hue}, ${theme.sat}%, ${theme.light}%, ${alpha})`;
         
         if (glow) {
-            effectCtx.shadowBlur = 15 - line * 3;
-            effectCtx.shadowColor = effectCtx.strokeStyle;
+            ctx.shadowBlur = 15 - line * 3;
+            ctx.shadowColor = ctx.strokeStyle;
         }
 
-        effectCtx.beginPath();
+        ctx.beginPath();
 
         const points = 200;
         for (let i = 0; i < points; i++) {
             const t = i / points;
             const dataIndex = Math.floor(t * bufferLength);
-            const v = (dataArray[dataIndex] || 128) / 128 - 1;
+            const v = (energy.data[dataIndex] || 128) / 128 - 1;
 
             let x, y;
             const waveHeight = h * 0.3 * amplitude * (1 + energy.bass);
@@ -906,25 +905,25 @@ function drawWave(energy, time, theme) {
             }
 
             if (i === 0) {
-                effectCtx.moveTo(x, y);
+                ctx.moveTo(x, y);
             } else {
-                effectCtx.lineTo(x, y);
+                ctx.lineTo(x, y);
             }
         }
 
-        effectCtx.stroke();
+        ctx.stroke();
     }
 
-    effectCtx.shadowBlur = 0;
+    ctx.shadowBlur = 0;
 }
 
 // 环形效果
-function drawCircular(energy, time, theme) {
-    const cx = effectCanvas.width / 2;
-    const cy = effectCanvas.height / 2;
+function drawCircular(ctx, w, h, energy, time, theme) {
+    const cx = w / 2;
+    const cy = h / 2;
     const radius = Math.min(cx, cy) * 0.35;
 
-    effectCtx.beginPath();
+    ctx.beginPath();
     for (let i = 0; i < bufferLength; i++) {
         const angle = (i / bufferLength) * Math.PI * 2 - Math.PI / 2;
         const amp = (energy.data[i] / 255) * radius * 0.5 * (1 + energy.bass);
@@ -933,27 +932,27 @@ function drawCircular(energy, time, theme) {
         const y = cy + Math.sin(angle) * r;
 
         if (i === 0) {
-            effectCtx.moveTo(x, y);
+            ctx.moveTo(x, y);
         } else {
-            effectCtx.lineTo(x, y);
+            ctx.lineTo(x, y);
         }
     }
-    effectCtx.closePath();
+    ctx.closePath();
     
     const hue = (theme.hue + time * 30) % 360;
-    effectCtx.strokeStyle = `hsl(${hue}, ${theme.sat}%, ${theme.light}%)`;
-    effectCtx.lineWidth = 3;
-    effectCtx.shadowBlur = 20;
-    effectCtx.shadowColor = effectCtx.strokeStyle;
-    effectCtx.stroke();
+    ctx.strokeStyle = `hsl(${hue}, ${theme.sat}%, ${theme.light}%)`;
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.stroke();
 
     const centerPulse = radius * 0.2 + energy.bass * radius * 0.3;
-    effectCtx.beginPath();
-    effectCtx.arc(cx, cy, centerPulse, 0, Math.PI * 2);
-    effectCtx.fillStyle = `hsla(${hue}, ${theme.sat}%, ${theme.light}%, ${0.3 + energy.average * 0.4})`;
-    effectCtx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy, centerPulse, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${hue}, ${theme.sat}%, ${theme.light}%, ${0.3 + energy.average * 0.4})`;
+    ctx.fill();
 
-    effectCtx.shadowBlur = 0;
+    ctx.shadowBlur = 0;
 }
 
 // 格式化时间
@@ -963,19 +962,274 @@ function formatTime(seconds) {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-// 导出视频
-async function exportVideo() {
+// 浏览器录制导出
+async function exportVideoBrowser() {
     if (!currentFile) return;
 
     const progressEl = document.getElementById('exportProgress');
-    const progressBar = document.getElementById('exportProgressBar');
+    const progressBar = document.getElementById('progressBarFill');
     const progressText = document.getElementById('progressText');
     const exportBtn = document.getElementById('exportBtn');
 
     progressEl.classList.add('active');
     exportBtn.disabled = true;
-    progressText.textContent = '准备导出...';
-    progressBar.style.width = '0%';
+
+    if (!window.MediaRecorder) {
+        progressText.textContent = '浏览器不支持录制，使用传统导出';
+        await exportVideoServer();
+        return;
+    }
+
+    try {
+        progressText.textContent = '准备录制...';
+        progressBar.style.width = '5%';
+
+        const mediaElement = isVideo ? videoElement : audioElement;
+        const wasPlaying = isPlaying;
+
+        // 暂停当前播放并重置
+        mediaElement.pause();
+        mediaElement.currentTime = 0;
+        isPlaying = false;
+        document.getElementById('playBtn').textContent = '▶';
+
+        if (!audioContext) initAudioContext();
+
+        // 获取特效层的位置和尺寸信息
+        const overlay = document.getElementById('overlayContainer');
+        const overlayRect = overlay.getBoundingClientRect();
+        const canvasRect = videoCanvas.getBoundingClientRect();
+
+        // 计算特效层相对于 videoCanvas 的缩放和位置
+        const scaleX = videoCanvas.width / canvasRect.width;
+        const scaleY = videoCanvas.height / canvasRect.height;
+        const overlayX = (overlayRect.left - canvasRect.left) * scaleX;
+        const overlayY = (overlayRect.top - canvasRect.top) * scaleY;
+        const overlayW = overlayRect.width * scaleX;
+        const overlayH = overlayRect.height * scaleY;
+
+        // 创建音频流
+        let audioStream;
+        try {
+            const dest = audioContext.createMediaStreamDestination();
+            if (source) source.connect(dest);
+            analyser.connect(dest);
+            audioStream = dest.stream;
+        } catch (e) {
+            console.warn('音频录制可能有问题:', e);
+        }
+
+        // 使用 videoCanvas 创建视频流（在录制期间我们将重写绘制逻辑）
+        const videoStream = videoCanvas.captureStream(30);
+
+        let combinedStream;
+        if (audioStream) {
+            combinedStream = new MediaStream([
+                ...videoStream.getVideoTracks(),
+                ...audioStream.getAudioTracks()
+            ]);
+        } else {
+            combinedStream = videoStream;
+        }
+
+        const mimeTypes = [
+            'video/webm;codecs=vp9,opus',
+            'video/webm;codecs=vp8,opus',
+            'video/webm'
+        ];
+        let selectedMimeType = '';
+        for (const type of mimeTypes) {
+            if (MediaRecorder.isTypeSupported(type)) {
+                selectedMimeType = type;
+                break;
+            }
+        }
+
+        const recorder = new MediaRecorder(combinedStream, {
+            mimeType: selectedMimeType,
+            videoBitsPerSecond: 8 * 1024 * 1024
+        });
+
+        const chunks = [];
+        recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+                chunks.push(e.data);
+            }
+        };
+
+        const duration = mediaElement.duration;
+        progressText.textContent = `录制中 (0/${formatTime(duration)})...`;
+        progressBar.style.width = '10%';
+
+        let startTime = null;
+        let progressInterval = null;
+        let recordingActive = false;
+
+        // 保存原始的动画循环
+        const originalAnimationId = animationId;
+
+        // 停止原始动画循环
+        if (originalAnimationId) {
+            cancelAnimationFrame(originalAnimationId);
+        }
+
+        // 临时保存 effectCanvas 的尺寸
+        const origEffectW = effectCanvas.width;
+        const origEffectH = effectCanvas.height;
+
+        // 用于临时绘制特效的函数（直接画到 videoCanvas）
+        function drawVideoWithEffects(time) {
+            const ctx = videoCtx;
+            const w = videoCanvas.width;
+            const h = videoCanvas.height;
+
+            // 绘制视频/背景
+            ctx.clearRect(0, 0, w, h);
+
+            if (useBgImage && bgImage) {
+                ctx.drawImage(bgImage, 0, 0, w, h);
+            } else if (isVideo) {
+                try {
+                    ctx.drawImage(videoElement, 0, 0, w, h);
+                } catch (e) {}
+            } else {
+                ctx.fillStyle = '#0d0d1a';
+                ctx.fillRect(0, 0, w, h);
+            }
+
+            // 获取音频数据
+            if (analyser) {
+                analyser.getByteFrequencyData(dataArray);
+            }
+
+            // 保存状态并设置特效裁剪区域
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(overlayX, overlayY, overlayW, overlayH);
+            ctx.clip();
+
+            // 临时修改 effectCanvas 尺寸
+            effectCanvas.width = overlayW;
+            effectCanvas.height = overlayH;
+            effectCtx.clearRect(0, 0, overlayW, overlayH);
+
+            // 绘制特效到 effectCanvas
+            drawEffectToCanvas(time);
+
+            // 将特效绘制到 videoCanvas
+            ctx.drawImage(effectCanvas, overlayX, overlayY, overlayW, overlayH);
+
+            // 恢复 effectCanvas 尺寸
+            effectCanvas.width = origEffectW;
+            effectCanvas.height = origEffectH;
+
+            ctx.restore();
+        }
+
+        // 录制用的动画循环
+        let recordingAnimationId = null;
+
+        function recordingLoop() {
+            if (!recordingActive) return;
+
+            const currentTime = (Date.now() - startTime) * 0.001;
+            drawVideoWithEffects(currentTime * 1000);
+
+            recordingAnimationId = requestAnimationFrame(recordingLoop);
+        }
+
+        recorder.onstart = () => {
+            startTime = Date.now();
+            recordingActive = true;
+            mediaElement.play();
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = '⏸';
+
+            progressInterval = setInterval(() => {
+                if (!recordingActive) return;
+                const elapsed = (Date.now() - startTime) / 1000;
+                const percent = Math.min(95, 10 + (elapsed / duration) * 85);
+                progressBar.style.width = percent + '%';
+                progressText.textContent = `录制中 (${formatTime(elapsed)}/${formatTime(duration)})...`;
+            }, 100);
+
+            // 启动录制循环
+            requestAnimationFrame(recordingLoop);
+        };
+
+        recorder.onstop = () => {
+            clearInterval(progressInterval);
+            recordingActive = false;
+
+            if (recordingAnimationId) {
+                cancelAnimationFrame(recordingAnimationId);
+            }
+
+            // 恢复原始动画循环
+            if (originalAnimationId) {
+                animate();
+            }
+
+            progressText.textContent = '正在处理...';
+            progressBar.style.width = '96%';
+
+            const blob = new Blob(chunks, { type: selectedMimeType || 'video/webm' });
+
+            if (blob.size === 0) {
+                progressText.textContent = '录制失败，文件为空';
+                exportBtn.disabled = false;
+                return;
+            }
+
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `seesound-export-${Date.now()}.webm`;
+            a.click();
+
+            progressBar.style.width = '100%';
+            progressText.textContent = '导出完成！';
+
+            setTimeout(() => {
+                progressEl.classList.remove('active');
+                exportBtn.disabled = false;
+                URL.revokeObjectURL(url);
+            }, 3000);
+
+            if (wasPlaying) {
+                mediaElement.play();
+                isPlaying = true;
+                document.getElementById('playBtn').textContent = '⏸';
+            }
+        };
+
+        // 监听媒体结束
+        mediaElement.onended = () => {
+            recordingActive = false;
+            recorder.stop();
+            isPlaying = false;
+            document.getElementById('playBtn').textContent = '▶';
+        };
+
+        recorder.start(100);
+
+    } catch (error) {
+        console.error('录制失败:', error);
+        progressText.textContent = '录制失败，使用传统导出...';
+        await new Promise(r => setTimeout(r, 1000));
+        await exportVideoServer();
+    }
+}
+
+// 传统服务器导出
+async function exportVideoServer() {
+    if (!currentFile) return;
+
+    const progressEl = document.getElementById('exportProgress');
+    const progressBar = document.getElementById('progressBarFill');
+    const progressText = document.getElementById('progressText');
+    const exportBtn = document.getElementById('exportBtn');
 
     try {
         const settings = {
@@ -990,12 +1244,20 @@ async function exportVideo() {
                 width: parseInt(document.getElementById('overlayContainer').style.width) || videoCanvas.width,
                 height: parseInt(document.getElementById('overlayContainer').style.height) || videoCanvas.height
             },
-            scaleFactor: videoCanvas.width / parseInt(videoCanvas.style.width || videoCanvas.width)
+            scaleFactor: videoCanvas.width / parseInt(videoCanvas.style.width || videoCanvas.width),
+            useBgImage: useBgImage,
+            bgImageWidth: bgImage ? bgImage.width : null,
+            bgImageHeight: bgImage ? bgImage.height : null
         };
 
         const formData = new FormData();
         formData.append('video', currentFile);
         formData.append('settings', JSON.stringify(settings));
+
+        // 如果有背景图，也上传
+        if (useBgImage && bgImageFile) {
+            formData.append('bgImage', bgImageFile);
+        }
 
         progressText.textContent = '正在上传...';
         progressBar.style.width = '20%';
@@ -1037,6 +1299,16 @@ async function exportVideo() {
     } catch (error) {
         progressText.textContent = '错误: ' + error.message;
         exportBtn.disabled = false;
+    }
+}
+
+// 主导出函数
+async function exportVideo() {
+    const mode = document.getElementById('exportMode').value;
+    if (mode === 'browser') {
+        await exportVideoBrowser();
+    } else {
+        await exportVideoServer();
     }
 }
 
@@ -1234,93 +1506,6 @@ function loadConfigFile(e) {
     reader.readAsText(file);
     document.getElementById('configFile').value = '';
 }
-
-
-
-// 导出视频（支持背景图）
-async function exportVideo() {
-    if (!currentFile) return;
-
-    const progressEl = document.getElementById('exportProgress');
-    const progressBar = document.getElementById('exportProgressBar');
-    const progressText = document.getElementById('progressText');
-    const exportBtn = document.getElementById('exportBtn');
-
-    progressEl.classList.add('active');
-    exportBtn.disabled = true;
-    progressText.textContent = '准备导出...';
-    progressBar.style.width = '0%';
-
-    try {
-        const settings = {
-            ...effectSettings,
-            resolution: document.getElementById('resolution').value,
-            quality: document.getElementById('quality').value,
-            canvasWidth: videoCanvas.width,
-            canvasHeight: videoCanvas.height,
-            overlayRect: {
-                x: (parseInt(document.getElementById('overlayContainer').style.left) || 0) - 20,
-                y: (parseInt(document.getElementById('overlayContainer').style.top) || 0) - 20,
-                width: parseInt(document.getElementById('overlayContainer').style.width) || videoCanvas.width,
-                height: parseInt(document.getElementById('overlayContainer').style.height) || videoCanvas.height
-            },
-            scaleFactor: videoCanvas.width / parseInt(videoCanvas.style.width || videoCanvas.width),
-            useBgImage: useBgImage,
-            bgImageWidth: bgImage ? bgImage.width : null,
-            bgImageHeight: bgImage ? bgImage.height : null
-        };
-
-        const formData = new FormData();
-        formData.append('video', currentFile);
-        formData.append('settings', JSON.stringify(settings));
-
-        // 如果有背景图，也上传
-        if (useBgImage && bgImageFile) {
-            formData.append('bgImage', bgImageFile);
-        }
-
-        progressText.textContent = '正在上传...';
-        progressBar.style.width = '20%';
-
-        const response = await fetch(`${apiBaseUrl}/api/export`, {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!response.ok) throw new Error('导出失败: ' + response.statusText);
-
-        const { taskId } = await response.json();
-
-        const checkProgress = setInterval(async () => {
-            const statusRes = await fetch(`${apiBaseUrl}/api/export/status/${taskId}`);
-            const status = await statusRes.json();
-
-            if (status.progress) {
-                progressBar.style.width = (20 + status.progress * 0.8) + '%';
-                progressText.textContent = status.message || '处理中...';
-            }
-
-            if (status.status === 'completed') {
-                clearInterval(checkProgress);
-                progressText.textContent = '导出完成！';
-                progressBar.style.width = '100%';
-                window.open(`${apiBaseUrl}/api/export/download/${taskId}`, '_blank');
-                setTimeout(() => {
-                    progressEl.classList.remove('active');
-                    exportBtn.disabled = false;
-                }, 3000);
-            } else if (status.status === 'failed') {
-                clearInterval(checkProgress);
-                progressText.textContent = '导出失败: ' + status.error;
-                exportBtn.disabled = false;
-            }
-        }, 1000);
-
-    } catch (error) {
-        progressText.textContent = '错误: ' + error.message;
-        exportBtn.disabled = false;
-    }
-};
 
 // 启动
 init();
