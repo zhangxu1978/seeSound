@@ -1041,6 +1041,9 @@ function drawEffectToCanvas(time) {
 
     // 根据类型绘制
     switch (effectSettings.type) {
+        case 'none':
+            // 无效果，不绘制任何内容
+            break;
         case 'particles':
             drawParticles(ctx, w, h, energy, t, theme);
             break;
