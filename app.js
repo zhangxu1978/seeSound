@@ -297,7 +297,17 @@ function bindSubtitleEvents() {
 
     document.getElementById('exportSubtitleBtn')?.addEventListener('click', () => {
         if (subtitleSettings.subtitles && subtitleSettings.subtitles.length > 0) {
-            const srtContent = subtitlesToSRT(subtitleSettings.subtitles);
+            const srtContent = subtitleSettings.subtitles.map((sub, idx) => {
+                const startHrs = Math.floor(sub.startTime / 3600).toString().padStart(2, '0');
+                const startMins = Math.floor((sub.startTime % 3600) / 60).toString().padStart(2, '0');
+                const startSecs = Math.floor(sub.startTime % 60).toString().padStart(2, '0');
+                const startMs = Math.floor((sub.startTime % 1) * 1000).toString().padStart(3, '0');
+                const endHrs = Math.floor(sub.endTime / 3600).toString().padStart(2, '0');
+                const endMins = Math.floor((sub.endTime % 3600) / 60).toString().padStart(2, '0');
+                const endSecs = Math.floor(sub.endTime % 60).toString().padStart(2, '0');
+                const endMs = Math.floor((sub.endTime % 1) * 1000).toString().padStart(3, '0');
+                return `${idx + 1}\n${startHrs}:${startMins}:${startSecs},${startMs} --> ${endHrs}:${endMins}:${endSecs},${endMs}\n${sub.text}`;
+            }).join('\n\n');
             const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -308,6 +318,17 @@ function bindSubtitleEvents() {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+        }
+    });
+
+    document.getElementById('batchLinkSubtitleBtn')?.addEventListener('click', () => {
+        if (subtitles && subtitles.length > 1) {
+            for (let i = 0; i < subtitles.length - 1; i++) {
+                subtitles[i].endTime = subtitles[i + 1].startTime;
+            }
+            subtitleSettings.subtitles = [...subtitles];
+            renderSubtitleList();
+            updateSubtitlePreview();
         }
     });
 
