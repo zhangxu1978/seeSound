@@ -38,6 +38,17 @@ let isSubtitleDragging = false;
 let loadedFonts = new Set();
 let subtitles = [];
 
+// 字幕滚动动画状态
+let subtitleScrollState = {
+    isAnimating: false,
+    animationStartTime: 0,
+    animationDuration: 0.6,  // 动画持续时间（秒）
+    prevSubIndex: -1,        // 动画开始前的字幕索引
+    prevPrevText: '',         // 动画开始前的上一句
+    prevCurrentText: '',      // 动画开始前的当前句
+    prevNextText: ''          // 动画开始前的下一句
+};
+
 const FONT_LIST = [
     '杨任东竹石体-Regular.ttf',
     '站酷快乐体2016修订版.ttf',
@@ -503,7 +514,7 @@ function drawSubtitles(ctx, width, height, currentTime, energy) {
 
     switch (subtitleSettings.effect) {
         case 'scrolling':
-            drawScrollingSubtitles(ctx, subData, posX, posY, fontSize);
+            drawScrollingSubtitles(ctx, subData, posX, posY, fontSize, currentTime);
             break;
         case 'fadein':
             drawFadeinSubtitles(ctx, subData, posX, posY, fontSize, currentTime);
@@ -554,29 +565,108 @@ function drawSubtitleText(ctx, text, x, y, fontSize, isPreview = false) {
     ctx.fillText(text, x, y);
 }
 
-function drawScrollingSubtitles(ctx, subData, x, y, fontSize) {
-    const lines = [];
-    const prevText = subData.prev ? subData.prev.text : '';
-    const nextText = subData.next ? subData.next.text : '';
+// 缓动函数 - easeOutQuad（快出慢入）
+function easeOutQuad(t) {
+    return t * (2 - t);
+}
 
-    lines.push(prevText || ' ');
-    lines.push(subData.current.text);
-    lines.push(nextText || ' ');
-
+function drawScrollingSubtitles(ctx, subData, x, y, fontSize, currentTime) {
     const lineHeight = fontSize * 1.5;
-    const startY = y - lineHeight;
+    const startY = y - lineHeight;  // 第一行Y坐标（当前句应显示的位置）
 
-    ctx.globalAlpha = 0.5;
-    if (prevText) {
-        drawSubtitleText(ctx, prevText, x, startY, fontSize * 0.8);
+    // 当前字幕内容
+    const currentPrevText = subData.prev ? subData.prev.text : '';
+    const currentCurrentText = subData.current.text;
+    const currentNextText = subData.next ? subData.next.text : '';
+
+    // 首次进入，初始化状态
+    if (subtitleScrollState.prevSubIndex === -1) {
+        subtitleScrollState.prevSubIndex = subData.index;
+        subtitleScrollState.isAnimating = false;
+        subtitleScrollState.prevPrevText = currentPrevText;  // 初始化用于下次动画
     }
 
-    ctx.globalAlpha = 1.0;
-    drawSubtitleText(ctx, '▶ ' + subData.current.text, x, startY + lineHeight, fontSize);
+    // 检测字幕切换 - 当字幕索引变化时开始新动画
+    if (subData.index !== subtitleScrollState.prevSubIndex) {
+        // 开始新的滚动动画
+        subtitleScrollState.isAnimating = true;
+        subtitleScrollState.animationStartTime = currentTime;
 
-    ctx.globalAlpha = 0.5;
-    if (nextText) {
-        drawSubtitleText(ctx, nextText, x, startY + lineHeight * 2, fontSize * 0.8);
+        // 记录动画开始前的字幕内容（用于动画过程）
+        subtitleScrollState.prevPrevText = subtitleScrollState.prevPrevText || currentPrevText;
+        subtitleScrollState.prevCurrentText = currentCurrentText;
+        subtitleScrollState.prevNextText = currentNextText;
+
+        // 更新索引为新字幕的索引（注意：这是新的 prev 当前句）
+        subtitleScrollState.prevSubIndex = subData.index;
+    }
+
+    if (subtitleScrollState.isAnimating) {
+        // 计算动画进度
+        const elapsed = currentTime - subtitleScrollState.animationStartTime;
+        const progress = Math.min(1, elapsed / subtitleScrollState.animationDuration);
+        const easedProgress = easeOutQuad(progress);  // 使用缓动函数
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // === 第一行：动画前的上一句（向上淡出） ===
+        const row1OffsetY = -lineHeight * easedProgress;  // 向上移动
+        const row1Alpha = Math.max(0, 0.5 * (1 - easedProgress * 1.5));  // 快速淡出
+
+        if (subtitleScrollState.prevPrevText && row1Alpha > 0.01) {
+            ctx.globalAlpha = row1Alpha;
+            drawSubtitleText(ctx, subtitleScrollState.prevPrevText, x, startY + row1OffsetY, fontSize * 0.8);
+        }
+
+        // === 第二行：动画前的当前句（向上移动到焦点位置） ===
+        const row2OffsetY = lineHeight * (1 - easedProgress);  // 从当前位置移动到焦点位置
+        const row2Alpha = 1.0;
+
+        ctx.globalAlpha = row2Alpha;
+        drawSubtitleText(ctx, '▶ ' + subtitleScrollState.prevCurrentText, x, startY + row2OffsetY, fontSize);
+
+        // === 第三行：下一句（淡入移入） ===
+        const row3OffsetY = lineHeight * (2 - easedProgress);  // 从下方移入
+        const row3Alpha = Math.min(0.5, easedProgress * 1.2);  // 渐显
+
+        if (currentNextText && row3Alpha > 0.01) {
+            ctx.globalAlpha = row3Alpha;
+            drawSubtitleText(ctx, currentNextText, x, startY + row3OffsetY, fontSize * 0.8);
+        }
+
+        ctx.restore();
+
+        // 动画结束
+        if (progress >= 1) {
+            subtitleScrollState.isAnimating = false;
+            // 更新 prevPrevText 为新的 prev（用于下次动画）
+            subtitleScrollState.prevPrevText = currentPrevText;
+        }
+    } else {
+        // 非动画状态：静态显示三行字幕
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // 第一行（上一句）- 淡化显示
+        ctx.globalAlpha = 0.5;
+        if (currentPrevText) {
+            drawSubtitleText(ctx, currentPrevText, x, startY, fontSize * 0.8);
+        }
+
+        // 第二行（当前句）- 焦点显示
+        ctx.globalAlpha = 1.0;
+        drawSubtitleText(ctx, '▶ ' + currentCurrentText, x, startY + lineHeight, fontSize);
+
+        // 第三行（下一句）- 淡化显示
+        ctx.globalAlpha = 0.5;
+        if (currentNextText) {
+            drawSubtitleText(ctx, currentNextText, x, startY + lineHeight * 2, fontSize * 0.8);
+        }
+
+        ctx.restore();
     }
 
     ctx.globalAlpha = 1.0;
