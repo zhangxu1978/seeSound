@@ -36,6 +36,7 @@ let subtitleCanvas, subtitleCtx;
 let subtitleDragOffset = { x: 0, y: 0 };
 let isSubtitleDragging = false;
 let loadedFonts = new Set();
+let subtitles = [];
 
 const FONT_LIST = [
     '杨任东竹石体-Regular.ttf',
@@ -339,8 +340,10 @@ function handleSrtFileSelect(e) {
 
     const reader = new FileReader();
     reader.onload = (event) => {
-        subtitleSettings.subtitles = parseSRT(event.target.result);
-        console.log('字幕加载成功，共', subtitleSettings.subtitles.length, '条');
+        subtitles = parseSRT(event.target.result);
+        subtitleSettings.subtitles = subtitles;
+        console.log('字幕加载成功，共', subtitles.length, '条');
+        renderSubtitleList();
         initSubtitlePreview();
     };
     reader.readAsText(file);
@@ -374,6 +377,77 @@ function parseSRT(content) {
     return subtitles.sort((a, b) => a.startTime - b.startTime);
 }
 
+function formatTime(seconds) {
+    const hrs = Math.floor(seconds / 3600).toString().padStart(2, '0');
+    const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+    const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+    const ms = Math.floor((seconds % 1) * 1000).toString().padStart(3, '0');
+    return `${hrs}:${mins}:${secs},${ms}`;
+}
+
+function subtitlesToSRT(subtitleArray) {
+    if (!subtitleArray || subtitleArray.length === 0) return '';
+    
+    return subtitleArray.map((sub, idx) => {
+        return `${idx + 1}\n${formatTime(sub.startTime)} --> ${formatTime(sub.endTime)}\n${sub.text}\n`;
+    }).join('\n');
+}
+
+function renderSubtitleList() {
+    const container = document.getElementById('subtitleList');
+    const title = document.getElementById('subtitleListTitle');
+    const listContainer = document.getElementById('subtitleListContainer');
+    
+    if (!subtitles || subtitles.length === 0) {
+        title.style.display = 'none';
+        listContainer.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+    
+    title.style.display = 'block';
+    listContainer.style.display = 'block';
+    
+    container.innerHTML = subtitles.map((sub, idx) => `
+        <div class="subtitle-item" data-index="${idx}" style="padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+            <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 6px;">
+                ${formatTime(sub.startTime)} → ${formatTime(sub.endTime)}
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <input type="text" class="subtitle-text-input" data-idx="${idx}" 
+                       value="${sub.text.replace(/"/g, '&quot;')}" 
+                       style="flex: 1; background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 6px 10px; color: #fff; font-size: 13px;">
+                <button class="delete-subtitle-btn" data-idx="${idx}" 
+                        style="background: #ff4444; border: none; color: #fff; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    ×
+                </button>
+            </div>
+        </div>
+    `).join('');
+    
+    container.querySelectorAll('.subtitle-text-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            if (subtitles[idx]) {
+                subtitles[idx].text = e.target.value;
+                subtitleSettings.subtitles = [...subtitles];
+                updateSubtitlePreview();
+            }
+        });
+    });
+    
+    container.querySelectorAll('.delete-subtitle-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            subtitles.splice(idx, 1);
+            subtitles = subtitles.map((sub, i) => ({ ...sub, index: i + 1 }));
+            subtitleSettings.subtitles = [...subtitles];
+            renderSubtitleList();
+            updateSubtitlePreview();
+        });
+    });
+}
+
 function applySubtitleSettings() {
     console.log('字幕设置已应用:', subtitleSettings);
 }
@@ -397,6 +471,10 @@ function initSubtitlePreview() {
     const demoLines = ['上一行动歌词', '▶ 正在演唱的歌词', '下一行动歌词'];
     const previewFontSize = Math.min(subtitleSettings.fontSize * 0.5, 24);
     drawSubtitleText(subtitleCtx, demoLines.join('\n'), subtitleCanvas.width / 2, subtitleCanvas.height / 2 + 12, previewFontSize, true);
+}
+
+function updateSubtitlePreview() {
+    initSubtitlePreview();
 }
 
 function getCurrentSubtitle(currentTime) {
@@ -1697,7 +1775,8 @@ async function exportVideoServer() {
                 strokeColor: subtitleSettings.strokeColor,
                 strokeWidth: subtitleSettings.strokeWidth,
                 effect: subtitleSettings.effect,
-                position: subtitleSettings.position
+                position: subtitleSettings.position,
+                subtitles: subtitleSettings.subtitles
             } : null
         };
 
@@ -1710,9 +1789,12 @@ async function exportVideoServer() {
             formData.append('bgImage', bgImageFile);
         }
 
-        // 如果有字幕文件，也上传
-        if (subtitleSettings.enabled && subtitleSettings.srtFile) {
-            formData.append('subtitle', subtitleSettings.srtFile);
+        // 如果有字幕，上传编辑后的字幕内容
+        if (subtitleSettings.enabled && subtitleSettings.subtitles && subtitleSettings.subtitles.length > 0) {
+            const srtContent = subtitlesToSRT(subtitleSettings.subtitles);
+            const srtBlob = new Blob([srtContent], { type: 'text/plain' });
+            const srtFileName = subtitleSettings.srtFile ? subtitleSettings.srtFile.name : 'subtitles.srt';
+            formData.append('subtitle', srtBlob, srtFileName);
         }
 
         progressText.textContent = '正在上传...';

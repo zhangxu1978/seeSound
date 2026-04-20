@@ -1219,15 +1219,22 @@ app.post('/api/export', multiUpload, async (req, res) => {
             console.log(`🖼️  背景图尺寸: ${settings.bgImageWidth}x${settings.bgImageHeight}`);
         }
 
-        // 解析字幕文件
+        // 解析字幕 - 优先使用设置中的字幕数据
         let subtitleData = null;
-        if (subtitleFile && settings.subtitle) {
-            try {
-                const srtContent = fs.readFileSync(subtitleFile.path, 'utf8');
-                subtitleData = parseSRT(srtContent);
-                console.log(`📝 字幕解析完成，共 ${subtitleData.length} 条字幕`);
-            } catch (err) {
-                console.warn(`📝 字幕解析失败:`, err.message);
+        if (settings.subtitle) {
+            // 检查是否有已编辑的字幕数据
+            if (settings.subtitle.subtitles && settings.subtitle.subtitles.length > 0) {
+                subtitleData = settings.subtitle.subtitles;
+                console.log(`📝 使用编辑后的字幕，共 ${subtitleData.length} 条`);
+            } else if (subtitleFile) {
+                // 否则从文件读取
+                try {
+                    const srtContent = fs.readFileSync(subtitleFile.path, 'utf8');
+                    subtitleData = parseSRT(srtContent);
+                    console.log(`📝 从文件解析字幕，共 ${subtitleData.length} 条`);
+                } catch (err) {
+                    console.warn(`📝 字幕解析失败:`, err.message);
+                }
             }
         }
 
