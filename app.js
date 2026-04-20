@@ -421,13 +421,19 @@ function renderSubtitleList() {
     
     container.innerHTML = subtitles.map((sub, idx) => `
         <div class="subtitle-item" data-index="${idx}" style="padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.05); border-radius: 6px;">
-            <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 6px;">
-                ${formatTime(sub.startTime)} → ${formatTime(sub.endTime)}
+            <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 6px; display: flex; gap: 8px; align-items: center;">
+                <input type="text" class="subtitle-start-time-input" data-idx="${idx}" value="${sub.startTime}" style="width: 80px; background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 6px; color: #fff; font-size: 11px;">
+                →
+                <input type="text" class="subtitle-end-time-input" data-idx="${idx}" value="${sub.endTime}" style="width: 80px; background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 4px 6px; color: #fff; font-size: 11px;">
             </div>
             <div style="display: flex; gap: 8px;">
                 <input type="text" class="subtitle-text-input" data-idx="${idx}" 
                        value="${sub.text.replace(/"/g, '&quot;')}" 
                        style="flex: 1; background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 6px 10px; color: #fff; font-size: 13px;">
+                <button class="link-subtitle-btn" data-idx="${idx}"
+                        style="background: #4a90d9; border: none; color: #fff; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;" title="连接下一字幕">
+                    →
+                </button>
                 <button class="delete-subtitle-btn" data-idx="${idx}" 
                         style="background: #ff4444; border: none; color: #fff; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
                     ×
@@ -446,6 +452,30 @@ function renderSubtitleList() {
             }
         });
     });
+
+    container.querySelectorAll('.subtitle-start-time-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            const value = parseFloat(e.target.value);
+            if (subtitles[idx] && !isNaN(value)) {
+                subtitles[idx].startTime = value;
+                subtitleSettings.subtitles = [...subtitles];
+                updateSubtitlePreview();
+            }
+        });
+    });
+
+    container.querySelectorAll('.subtitle-end-time-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            const value = parseFloat(e.target.value);
+            if (subtitles[idx] && !isNaN(value)) {
+                subtitles[idx].endTime = value;
+                subtitleSettings.subtitles = [...subtitles];
+                updateSubtitlePreview();
+            }
+        });
+    });
     
     container.querySelectorAll('.delete-subtitle-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -455,6 +485,18 @@ function renderSubtitleList() {
             subtitleSettings.subtitles = [...subtitles];
             renderSubtitleList();
             updateSubtitlePreview();
+        });
+    });
+
+    container.querySelectorAll('.link-subtitle-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            if (idx < subtitles.length - 1) {
+                subtitles[idx].endTime = subtitles[idx + 1].startTime;
+                subtitleSettings.subtitles = [...subtitles];
+                renderSubtitleList();
+                updateSubtitlePreview();
+            }
         });
     });
 }
