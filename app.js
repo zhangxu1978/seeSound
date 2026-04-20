@@ -295,6 +295,22 @@ function bindSubtitleEvents() {
         initSubtitlePreview();
     });
 
+    document.getElementById('exportSubtitleBtn')?.addEventListener('click', () => {
+        if (subtitleSettings.subtitles && subtitleSettings.subtitles.length > 0) {
+            const srtContent = subtitlesToSRT(subtitleSettings.subtitles);
+            const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const fileName = subtitleSettings.srtFile ? subtitleSettings.srtFile.name.replace('.srt', '_edited.srt') : 'subtitles_edited.srt';
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    });
+
     document.getElementById('subtitleFont')?.addEventListener('change', (e) => {
         subtitleSettings.fontFamily = e.target.value;
         loadSubtitleFont(subtitleSettings.fontFamily).then(() => {
