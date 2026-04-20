@@ -840,8 +840,31 @@ function setupDragResize() {
     let isDragging = false, isResizing = false;
     let startX, startY, startWidth, startHeight, startLeft, startTop;
 
+    // 检测鼠标是否在调整手柄区域
+    function isMouseOverHandle(e) {
+        const handleRect = handle.getBoundingClientRect();
+        // 增加可点击区域，向外扩展8px
+        const extendedRect = {
+            left: handleRect.left - 8,
+            top: handleRect.top - 8,
+            right: handleRect.right + 8,
+            bottom: handleRect.bottom + 8
+        };
+        return e.clientX >= extendedRect.left && e.clientX <= extendedRect.right &&
+               e.clientY >= extendedRect.top && e.clientY <= extendedRect.bottom;
+    }
+
+    // 鼠标移动时更新光标
+    overlay.addEventListener('mousemove', (e) => {
+        if (isMouseOverHandle(e)) {
+            overlay.style.cursor = 'nwse-resize';
+        } else {
+            overlay.style.cursor = 'move';
+        }
+    });
+
     overlay.addEventListener('mousedown', (e) => {
-        if (e.target === handle) {
+        if (isMouseOverHandle(e)) {
             isResizing = true;
             startX = e.clientX;
             startY = e.clientY;
@@ -879,6 +902,11 @@ function setupDragResize() {
         isDragging = false;
         isResizing = false;
         overlay.classList.remove('resizing');
+    });
+
+    // 鼠标离开时恢复默认光标
+    overlay.addEventListener('mouseleave', () => {
+        overlay.style.cursor = 'move';
     });
 }
 
