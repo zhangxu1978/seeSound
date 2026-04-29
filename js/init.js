@@ -11,6 +11,36 @@ async function loadConfig() {
     }
 }
 
+function initLayerContainers() {
+    seesound.effectLayer = document.getElementById('effectLayer');
+    seesound.subtitleLayer = document.getElementById('subtitleLayer');
+    seesound.textLayer = document.getElementById('textLayer');
+    
+    seesound.textLayerCanvas = document.getElementById('textLayerCanvas');
+    if (seesound.textLayerCanvas) {
+        seesound.textLayerCtx = seesound.textLayerCanvas.getContext('2d');
+    }
+    
+    seesound.subtitleCanvas = document.getElementById('subtitleCanvas');
+    if (seesound.subtitleCanvas) {
+        seesound.subtitleCtx = seesound.subtitleCanvas.getContext('2d');
+    }
+    
+    bindLayerEvents();
+}
+
+function updateLayerVisibility() {
+    if (seesound.effectLayer) {
+        seesound.effectLayer.style.display = seesound.effectLayerSettings.visible ? 'block' : 'none';
+    }
+    if (seesound.subtitleLayer) {
+        seesound.subtitleLayer.style.display = seesound.subtitleLayerSettings.visible ? 'block' : 'none';
+    }
+    if (seesound.textLayer) {
+        seesound.textLayer.style.display = seesound.textLayerSettings.visible ? 'block' : 'none';
+    }
+}
+
 async function init() {
     seesound.videoCanvas = document.getElementById('videoCanvas');
     seesound.effectCanvas = document.getElementById('effectCanvas');
@@ -20,14 +50,10 @@ async function init() {
     seesound.videoElement = document.getElementById('videoElement');
     seesound.audioElement = document.getElementById('audioElement');
 
-    seesound.subtitleCanvas = document.getElementById('subtitlePreviewCanvas');
-    if (seesound.subtitleCanvas) {
-        seesound.subtitleCtx = seesound.subtitleCanvas.getContext('2d');
-    }
+    initLayerContainers();
 
     await loadConfig();
     bindEvents();
-    setupDragResize();
     initParticles();
     updateSettingsVisibility();
     bindSubtitleEvents();

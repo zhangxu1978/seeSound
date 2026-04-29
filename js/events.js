@@ -122,6 +122,169 @@ function bindSubtitleEvents() {
     document.getElementById('srtFile')?.addEventListener('change', handleSrtFileSelect);
 }
 
+// 层事件绑定
+function bindLayerEvents() {
+    document.getElementById('effectLayerVisible')?.addEventListener('change', (e) => {
+        seesound.effectLayerSettings.visible = e.target.checked;
+        updateLayerVisibility();
+    });
+    
+    document.getElementById('subtitleLayerVisible')?.addEventListener('change', (e) => {
+        seesound.subtitleLayerSettings.visible = e.target.checked;
+        updateLayerVisibility();
+    });
+    
+    document.getElementById('textLayerVisible')?.addEventListener('change', (e) => {
+        seesound.textLayerSettings.visible = e.target.checked;
+        updateLayerVisibility();
+    });
+    
+    document.getElementById('textLayerContent')?.addEventListener('input', (e) => {
+        seesound.textLayerSettings.text = e.target.value;
+    });
+    
+    document.getElementById('textLayerFontSize')?.addEventListener('input', (e) => {
+        seesound.textLayerSettings.fontSize = parseInt(e.target.value);
+        document.getElementById('textLayerFontSizeValue').textContent = e.target.value;
+    });
+    
+    document.getElementById('textLayerStrokeWidth')?.addEventListener('input', (e) => {
+        seesound.textLayerSettings.strokeWidth = parseInt(e.target.value);
+        document.getElementById('textLayerStrokeWidthValue').textContent = e.target.value;
+    });
+    
+    document.getElementById('textLayerAlign')?.addEventListener('change', (e) => {
+        seesound.textLayerSettings.align = e.target.value;
+    });
+    
+    document.querySelectorAll('.color-option[data-textcolor]').forEach(opt => {
+        opt.addEventListener('click', () => {
+            document.querySelectorAll('.color-option[data-textcolor]').forEach(o => o.classList.remove('active'));
+            opt.classList.add('active');
+            seesound.textLayerSettings.color = opt.dataset.textcolor;
+        });
+    });
+    
+    document.querySelectorAll('.color-option[data-textstroke]').forEach(opt => {
+        opt.addEventListener('click', () => {
+            document.querySelectorAll('.color-option[data-textstroke]').forEach(o => o.classList.remove('active'));
+            opt.classList.add('active');
+            seesound.textLayerSettings.strokeColor = opt.dataset.textstroke;
+        });
+    });
+    
+    bindLayerDragEvents();
+}
+
+function bindLayerDragEvents() {
+    const layers = document.querySelectorAll('.layer-container');
+    
+    layers.forEach(layer => {
+        layer.addEventListener('mousedown', (e) => {
+            if (e.target.classList.contains('resize-handle')) return;
+            
+            e.preventDefault();
+            seesound.currentDraggingLayer = layer;
+            
+            const rect = layer.getBoundingClientRect();
+            const containerRect = document.getElementById('previewContainer').getBoundingClientRect();
+            
+            seesound.dragStartPos = { x: e.clientX, y: e.clientY };
+            seesound.dragOffset = { 
+                x: e.clientX - rect.left, 
+                y: e.clientY - rect.top 
+            };
+            
+            layers.forEach(l => l.classList.remove('selected'));
+            layer.classList.add('selected');
+        });
+        
+        const resizeHandle = layer.querySelector('.resize-handle');
+        if (resizeHandle) {
+            resizeHandle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                seesound.currentResizingLayer = layer;
+                
+                const rect = layer.getBoundingClientRect();
+                seesound.resizeStartSize = { width: rect.width, height: rect.height };
+                seesound.dragStartPos = { x: e.clientX, y: e.clientY };
+            });
+        }
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (seesound.currentDraggingLayer) {
+            e.preventDefault();
+            const containerRect = document.getElementById('previewContainer').getBoundingClientRect();
+            
+            const newX = e.clientX - containerRect.left - seesound.dragOffset.x;
+            const newY = e.clientY - containerRect.top - seesound.dragOffset.y;
+            
+            const maxX = containerRect.width - seesound.currentDraggingLayer.offsetWidth;
+            const maxY = containerRect.height - seesound.currentDraggingLayer.offsetHeight;
+            
+            const boundedX = Math.max(0, Math.min(newX, maxX));
+            const boundedY = Math.max(0, Math.min(newY, maxY));
+            
+            seesound.currentDraggingLayer.style.left = `${boundedX}px`;
+            seesound.currentDraggingLayer.style.top = `${boundedY}px`;
+            
+            const layerType = seesound.currentDraggingLayer.dataset.layer;
+            if (layerType === 'effect') {
+                seesound.effectLayerSettings.x = (boundedX / containerRect.width) * 100;
+                seesound.effectLayerSettings.y = (boundedY / containerRect.height) * 100;
+            } else if (layerType === 'subtitle') {
+                seesound.subtitleLayerSettings.x = (boundedX / containerRect.width) * 100;
+                seesound.subtitleLayerSettings.y = (boundedY / containerRect.height) * 100;
+            } else if (layerType === 'text') {
+                seesound.textLayerSettings.x = (boundedX / containerRect.width) * 100;
+                seesound.textLayerSettings.y = (boundedY / containerRect.height) * 100;
+            }
+        } else if (seesound.currentResizingLayer) {
+            e.preventDefault();
+            
+            const deltaX = e.clientX - seesound.dragStartPos.x;
+            const deltaY = e.clientY - seesound.dragStartPos.y;
+            
+            const newWidth = Math.max(100, seesound.resizeStartSize.width + deltaX);
+            const newHeight = Math.max(100, seesound.resizeStartSize.height + deltaY);
+            
+            const containerRect = document.getElementById('previewContainer').getBoundingClientRect();
+            const maxWidth = containerRect.width - seesound.currentResizingLayer.offsetLeft;
+            const maxHeight = containerRect.height - seesound.currentResizingLayer.offsetTop;
+            
+            const boundedWidth = Math.min(newWidth, maxWidth);
+            const boundedHeight = Math.min(newHeight, maxHeight);
+            
+            seesound.currentResizingLayer.style.width = `${boundedWidth}px`;
+            seesound.currentResizingLayer.style.height = `${boundedHeight}px`;
+            
+            const layerType = seesound.currentResizingLayer.dataset.layer;
+            if (layerType === 'effect') {
+                seesound.effectLayerSettings.width = (boundedWidth / containerRect.width) * 100;
+                seesound.effectLayerSettings.height = (boundedHeight / containerRect.height) * 100;
+            } else if (layerType === 'subtitle') {
+                seesound.subtitleLayerSettings.width = (boundedWidth / containerRect.width) * 100;
+                seesound.subtitleLayerSettings.height = (boundedHeight / containerRect.height) * 100;
+            } else if (layerType === 'text') {
+                seesound.textLayerSettings.width = (boundedWidth / containerRect.width) * 100;
+                seesound.textLayerSettings.height = (boundedHeight / containerRect.height) * 100;
+            }
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (seesound.currentDraggingLayer) {
+            seesound.currentDraggingLayer = null;
+        }
+        if (seesound.currentResizingLayer) {
+            seesound.currentResizingLayer.classList.remove('resizing');
+            seesound.currentResizingLayer = null;
+        }
+    });
+}
+
 // 绑定事件
 function bindEvents() {
     document.getElementById('fileUpload').addEventListener('click', () => {

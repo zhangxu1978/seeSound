@@ -55,112 +55,68 @@ function setupCanvasSize(width, height) {
     seesound.videoCanvas.style.width = canvasWidth + 'px';
     seesound.videoCanvas.style.height = canvasHeight + 'px';
 
-    const overlay = document.getElementById('overlayContainer');
-    overlay.style.width = canvasWidth + 'px';
-    overlay.style.height = canvasHeight + 'px';
-    overlay.style.left = '20px';
-    overlay.style.top = '20px';
-
     seesound.effectCanvas.width = width;
     seesound.effectCanvas.height = height;
+
+    if (seesound.effectLayer) {
+        seesound.effectLayer.style.width = canvasWidth + 'px';
+        seesound.effectLayer.style.height = canvasHeight + 'px';
+        seesound.effectLayer.style.left = '20px';
+        seesound.effectLayer.style.top = '20px';
+    }
+    
+    if (seesound.subtitleLayer) {
+        seesound.subtitleLayer.style.width = canvasWidth + 'px';
+        seesound.subtitleLayer.style.height = canvasHeight + 'px';
+        seesound.subtitleLayer.style.left = '20px';
+        seesound.subtitleLayer.style.top = '20px';
+    }
+    
+    if (seesound.textLayer) {
+        seesound.textLayer.style.width = canvasWidth + 'px';
+        seesound.textLayer.style.height = canvasHeight + 'px';
+        seesound.textLayer.style.left = '20px';
+        seesound.textLayer.style.top = '20px';
+    }
+    
+    if (seesound.subtitleCanvas) {
+        seesound.subtitleCanvas.width = width;
+        seesound.subtitleCanvas.height = height;
+    }
+    
+    if (seesound.textLayerCanvas) {
+        seesound.textLayerCanvas.width = width;
+        seesound.textLayerCanvas.height = height;
+    }
 }
 
 // 应用位置预设
 function applyPositionPreset(position) {
-    const overlay = document.getElementById('overlayContainer');
-    const canvasWidth = parseInt(seesound.videoCanvas.style.width);
-    const canvasHeight = parseInt(seesound.videoCanvas.style.height);
+    const layer = seesound.effectLayer;
+    if (!layer) return;
+
+    const canvasWidth = parseInt(seesound.videoCanvas.style.width) || 1280;
+    const canvasHeight = parseInt(seesound.videoCanvas.style.height) || 720;
 
     const positions = {
-        'fullscreen': { width: canvasWidth, height: canvasHeight, left: 20, top: 20 },
-        'bottom': { width: canvasWidth, height: canvasHeight * 0.25, left: 20, top: 20 + canvasHeight * 0.75 },
-        'top': { width: canvasWidth, height: canvasHeight * 0.25, left: 20, top: 20 },
-        'center': { width: canvasWidth * 0.6, height: canvasHeight * 0.4, left: 20 + canvasWidth * 0.2, top: 20 + canvasHeight * 0.3 },
-        'left': { width: canvasWidth * 0.3, height: canvasHeight, left: 20, top: 20 },
-        'right': { width: canvasWidth * 0.3, height: canvasHeight, left: 20 + canvasWidth * 0.7, top: 20 }
+        'fullscreen': { width: canvasWidth, height: canvasHeight, left: 0, top: 0 },
+        'bottom': { width: canvasWidth, height: canvasHeight * 0.25, left: 0, top: canvasHeight * 0.75 },
+        'top': { width: canvasWidth, height: canvasHeight * 0.25, left: 0, top: 0 },
+        'center': { width: canvasWidth * 0.6, height: canvasHeight * 0.4, left: canvasWidth * 0.2, top: canvasHeight * 0.3 },
+        'left': { width: canvasWidth * 0.3, height: canvasHeight, left: 0, top: 0 },
+        'right': { width: canvasWidth * 0.3, height: canvasHeight, left: canvasWidth * 0.7, top: 0 }
     };
 
     const pos = positions[position];
     if (pos) {
-        overlay.style.width = pos.width + 'px';
-        overlay.style.height = pos.height + 'px';
-        overlay.style.left = pos.left + 'px';
-        overlay.style.top = pos.top + 'px';
+        layer.style.width = pos.width + 'px';
+        layer.style.height = pos.height + 'px';
+        layer.style.left = pos.left + 'px';
+        layer.style.top = pos.top + 'px';
     }
 }
 
-// 拖拽调整大小
-function setupDragResize() {
-    const overlay = document.getElementById('overlayContainer');
-    const handle = overlay.querySelector('.resize-handle');
-    let isDragging = false, isResizing = false;
-    let startX, startY, startWidth, startHeight, startLeft, startTop;
-
-    function isMouseOverHandle(e) {
-        const handleRect = handle.getBoundingClientRect();
-        const extendedRect = {
-            left: handleRect.left - 8,
-            top: handleRect.top - 8,
-            right: handleRect.right + 8,
-            bottom: handleRect.bottom + 8
-        };
-        return e.clientX >= extendedRect.left && e.clientX <= extendedRect.right &&
-               e.clientY >= extendedRect.top && e.clientY <= extendedRect.bottom;
-    }
-
-    overlay.addEventListener('mousemove', (e) => {
-        if (isMouseOverHandle(e)) {
-            overlay.style.cursor = 'nwse-resize';
-        } else {
-            overlay.style.cursor = 'move';
-        }
-    });
-
-    overlay.addEventListener('mousedown', (e) => {
-        if (isMouseOverHandle(e)) {
-            isResizing = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            startWidth = parseInt(overlay.style.width);
-            startHeight = parseInt(overlay.style.height);
-            overlay.classList.add('resizing');
-        } else {
-            isDragging = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            startLeft = parseInt(overlay.style.left) || 0;
-            startTop = parseInt(overlay.style.top) || 0;
-        }
-        e.preventDefault();
-    });
-
-    document.addEventListener('mousemove', (e) => {
-        if (isResizing) {
-            const newWidth = Math.max(100, startWidth + e.clientX - startX);
-            const newHeight = Math.max(100, startHeight + e.clientY - startY);
-            overlay.style.width = newWidth + 'px';
-            overlay.style.height = newHeight + 'px';
-            
-            const scaleX = seesound.videoCanvas.width / parseInt(seesound.videoCanvas.style.width);
-            const scaleY = seesound.videoCanvas.height / parseInt(seesound.videoCanvas.style.height);
-            seesound.effectCanvas.width = newWidth * scaleX;
-            seesound.effectCanvas.height = newHeight * scaleY;
-        } else if (isDragging) {
-            overlay.style.left = (startLeft + e.clientX - startX) + 'px';
-            overlay.style.top = (startTop + e.clientY - startY) + 'px';
-        }
-    });
-
-    document.addEventListener('mouseup', () => {
-        isDragging = false;
-        isResizing = false;
-        overlay.classList.remove('resizing');
-    });
-
-    overlay.addEventListener('mouseleave', () => {
-        overlay.style.cursor = 'move';
-    });
-}
+// 拖拽调整大小功能已移至 events.js 中的 bindLayerDragEvents()
 
 // 播放控制
 function togglePlay() {
@@ -211,7 +167,7 @@ function handleFileSelect(e) {
             seesound.videoElement.play();
             seesound.isPlaying = true;
             document.getElementById('playBtn').textContent = '⏸';
-            document.getElementById('overlayContainer').style.display = 'block';
+            if (seesound.effectLayer) seesound.effectLayer.style.display = 'block';
             connectAudioSource(seesound.videoElement);
             animate();
         };
@@ -219,7 +175,7 @@ function handleFileSelect(e) {
         seesound.audioElement.src = url;
         seesound.audioElement.load();
         setupCanvasSize(1280, 720);
-        document.getElementById('overlayContainer').style.display = 'block';
+        if (seesound.effectLayer) seesound.effectLayer.style.display = 'block';
         seesound.audioElement.oncanplay = () => {
             seesound.audioElement.play();
             seesound.isPlaying = true;
@@ -250,7 +206,7 @@ function handleBgImageSelect(e) {
 
         setupCanvasSize(seesound.bgImage.width, seesound.bgImage.height);
 
-        document.getElementById('overlayContainer').style.display = 'block';
+        if (seesound.effectLayer) seesound.effectLayer.style.display = 'block';
 
         if (!seesound.animationId) {
             animate();
@@ -315,10 +271,10 @@ function saveConfig() {
             position: seesound.effectSettings.position
         },
         overlayPosition: {
-            width: document.getElementById('overlayContainer').style.width,
-            height: document.getElementById('overlayContainer').style.height,
-            left: document.getElementById('overlayContainer').style.left,
-            top: document.getElementById('overlayContainer').style.top
+            width: seesound.effectLayer ? seesound.effectLayer.style.width : '100%',
+            height: seesound.effectLayer ? seesound.effectLayer.style.height : '100%',
+            left: seesound.effectLayer ? seesound.effectLayer.style.left : '0px',
+            top: seesound.effectLayer ? seesound.effectLayer.style.top : '0px'
         }
     };
 
@@ -401,12 +357,12 @@ function loadConfigFile(e) {
                 applyPositionPreset(seesound.effectSettings.position);
             }
 
-            if (config.overlayPosition) {
-                const overlay = document.getElementById('overlayContainer');
-                if (config.overlayPosition.width) overlay.style.width = config.overlayPosition.width;
-                if (config.overlayPosition.height) overlay.style.height = config.overlayPosition.height;
-                if (config.overlayPosition.left) overlay.style.left = config.overlayPosition.left;
-                if (config.overlayPosition.top) overlay.style.top = config.overlayPosition.top;
+            if (config.overlayPosition && seesound.effectLayer) {
+                const effectLayer = seesound.effectLayer;
+                if (config.overlayPosition.width) effectLayer.style.width = config.overlayPosition.width;
+                if (config.overlayPosition.height) effectLayer.style.height = config.overlayPosition.height;
+                if (config.overlayPosition.left) effectLayer.style.left = config.overlayPosition.left;
+                if (config.overlayPosition.top) effectLayer.style.top = config.overlayPosition.top;
             }
 
             initParticles();
@@ -444,6 +400,35 @@ function animate(time = 0) {
     drawEffectToCanvas(time);
 
     const mediaElement = seesound.isVideo ? seesound.videoElement : seesound.audioElement;
+    const currentTime = mediaElement?.currentTime || 0;
+    
+    let bass = 0, mid = 0, treble = 0, total = 0;
+    if (seesound.dataArray && seesound.dataArray.length > 0) {
+        const bassCount = Math.floor(seesound.bufferLength * 0.2);
+        const midCount = Math.floor(seesound.bufferLength * 0.5);
+        for (let i = 0; i < seesound.bufferLength; i++) {
+            total += seesound.dataArray[i];
+            if (i < bassCount) bass += seesound.dataArray[i];
+            else if (i < midCount) mid += seesound.dataArray[i];
+            else treble += seesound.dataArray[i];
+        }
+        bass = bass / bassCount / 255;
+        mid = mid / (midCount - bassCount) / 255;
+        treble = treble / (seesound.bufferLength - midCount) / 255;
+        total = total / seesound.bufferLength / 255;
+    }
+    
+    const energy = {
+        bass: bass * seesound.effectSettings.sensitivity,
+        mid: mid * seesound.effectSettings.sensitivity,
+        treble: treble * seesound.effectSettings.sensitivity,
+        average: total * seesound.effectSettings.sensitivity,
+        data: seesound.dataArray || new Uint8Array(seesound.bufferLength).fill(128)
+    };
+    
+    drawSubtitleLayer(currentTime, energy);
+    drawTextLayer();
+
     if (mediaElement.duration) {
         const percent = (mediaElement.currentTime / mediaElement.duration) * 100;
         document.getElementById('progressFill').style.width = percent + '%';
@@ -484,16 +469,16 @@ async function exportVideoBrowser() {
 
         if (!seesound.audioContext) initAudioContext();
 
-        const overlay = document.getElementById('overlayContainer');
-        const overlayRect = overlay.getBoundingClientRect();
+        const effectLayer = seesound.effectLayer;
+        const effectLayerRect = effectLayer ? effectLayer.getBoundingClientRect() : null;
         const canvasRect = seesound.videoCanvas.getBoundingClientRect();
 
         const scaleX = seesound.videoCanvas.width / canvasRect.width;
         const scaleY = seesound.videoCanvas.height / canvasRect.height;
-        const overlayX = (overlayRect.left - canvasRect.left) * scaleX;
-        const overlayY = (overlayRect.top - canvasRect.top) * scaleY;
-        const overlayW = overlayRect.width * scaleX;
-        const overlayH = overlayRect.height * scaleY;
+        const effectLayerX = effectLayerRect ? (effectLayerRect.left - canvasRect.left) * scaleX : 0;
+        const effectLayerY = effectLayerRect ? (effectLayerRect.top - canvasRect.top) * scaleY : 0;
+        const effectLayerW = effectLayerRect ? effectLayerRect.width * scaleX : seesound.videoCanvas.width;
+        const effectLayerH = effectLayerRect ? effectLayerRect.height * scaleY : seesound.videoCanvas.height;
 
         let audioStream;
         try {
@@ -582,16 +567,16 @@ async function exportVideoBrowser() {
 
             ctx.save();
             ctx.beginPath();
-            ctx.rect(overlayX, overlayY, overlayW, overlayH);
+            ctx.rect(effectLayerX, effectLayerY, effectLayerW, effectLayerH);
             ctx.clip();
 
-            seesound.effectCanvas.width = overlayW;
-            seesound.effectCanvas.height = overlayH;
-            seesound.effectCtx.clearRect(0, 0, overlayW, overlayH);
+            seesound.effectCanvas.width = effectLayerW;
+            seesound.effectCanvas.height = effectLayerH;
+            seesound.effectCtx.clearRect(0, 0, effectLayerW, effectLayerH);
 
             drawEffectToCanvas(time);
 
-            ctx.drawImage(seesound.effectCanvas, overlayX, overlayY, overlayW, overlayH);
+            ctx.drawImage(seesound.effectCanvas, effectLayerX, effectLayerY, effectLayerW, effectLayerH);
 
             seesound.effectCanvas.width = origEffectW;
             seesound.effectCanvas.height = origEffectH;
@@ -708,10 +693,10 @@ async function exportVideoServer() {
             canvasWidth: seesound.videoCanvas.width,
             canvasHeight: seesound.videoCanvas.height,
             overlayRect: {
-                x: (parseInt(document.getElementById('overlayContainer').style.left) || 0) - 20,
-                y: (parseInt(document.getElementById('overlayContainer').style.top) || 0) - 20,
-                width: parseInt(document.getElementById('overlayContainer').style.width) || seesound.videoCanvas.width,
-                height: parseInt(document.getElementById('overlayContainer').style.height) || seesound.videoCanvas.height
+                x: seesound.effectLayer ? (parseInt(seesound.effectLayer.style.left) || 0) : 0,
+                y: seesound.effectLayer ? (parseInt(seesound.effectLayer.style.top) || 0) : 0,
+                width: seesound.effectLayer ? (parseInt(seesound.effectLayer.style.width) || seesound.videoCanvas.width) : seesound.videoCanvas.width,
+                height: seesound.effectLayer ? (parseInt(seesound.effectLayer.style.height) || seesound.videoCanvas.height) : seesound.videoCanvas.height
             },
             scaleFactor: seesound.videoCanvas.width / parseInt(seesound.videoCanvas.style.width || seesound.videoCanvas.width),
             useBgImage: seesound.useBgImage,

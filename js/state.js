@@ -75,6 +75,49 @@ const effectSettings = {
     transformSpeed: 1
 };
 
+// 层容器元素
+let effectLayer, subtitleLayer, textLayer;
+let textLayerCanvas, textLayerCtx;
+
+// 层设置
+const effectLayerSettings = {
+    visible: true,
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100
+};
+
+const subtitleLayerSettings = {
+    visible: true,
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100
+};
+
+const textLayerSettings = {
+    visible: true,
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+    text: '自定义文字',
+    fontSize: 48,
+    fontFamily: 'Microsoft YaHei',
+    color: '#ffffff',
+    strokeColor: '#000000',
+    strokeWidth: 2,
+    align: 'center'
+};
+
+// 层拖拽状态
+let currentDraggingLayer = null;
+let currentResizingLayer = null;
+let dragStartPos = { x: 0, y: 0 };
+let dragOffset = { x: 0, y: 0 };
+let resizeStartSize = { width: 0, height: 0 };
+
 // 颜色主题
 const colorThemes = {
     purple: { hue: 240, sat: 70, light: 60 },
@@ -111,6 +154,12 @@ window.seesound = {
     bgImage, bgImageFile, useBgImage,
     subtitleSettings, subtitleCanvas, subtitleCtx,
     subtitleDragOffset, isSubtitleDragging, loadedFonts, subtitles,
-    subtitleScrollState, effectSettings, colorThemes, FONT_LIST
+    subtitleScrollState, effectSettings, colorThemes, FONT_LIST,
+    // 层相关
+    effectLayer, subtitleLayer, textLayer,
+    textLayerCanvas, textLayerCtx,
+    effectLayerSettings, subtitleLayerSettings, textLayerSettings,
+    currentDraggingLayer, currentResizingLayer,
+    dragStartPos, dragOffset, resizeStartSize
 };
 

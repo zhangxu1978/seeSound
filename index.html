@@ -63,22 +63,35 @@
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
         }
 
-        /* 视频/动画叠加层 */
-        .overlay-container {
+        /* 层容器通用样式 */
+        .layer-container {
             position: absolute;
-            border: 2px dashed #667eea;
+            border: 2px dashed transparent;
             cursor: move;
-            resize: both;
             overflow: hidden;
             min-width: 100px;
             min-height: 100px;
+            transition: border-color 0.2s;
         }
 
-        .overlay-container.resizing {
+        .layer-container:hover {
+            border-color: #667eea;
+        }
+
+        .layer-container.selected {
+            border-color: #667eea;
+            box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+        }
+
+        .layer-container.resizing {
             border-color: #f5576c;
         }
 
-        .overlay-container .resize-handle {
+        .layer-container.hidden {
+            display: none;
+        }
+
+        .layer-container .resize-handle {
             position: absolute;
             width: 12px;
             height: 12px;
@@ -87,11 +100,36 @@
             bottom: -6px;
             right: -6px;
             cursor: nwse-resize;
+            display: none;
         }
 
-        #effectCanvas {
+        .layer-container:hover .resize-handle,
+        .layer-container.selected .resize-handle {
+            display: block;
+        }
+
+        .layer-canvas {
             width: 100%;
             height: 100%;
+        }
+
+        /* 层标签 */
+        .layer-label {
+            position: absolute;
+            top: -24px;
+            left: 0;
+            padding: 2px 8px;
+            background: rgba(102, 126, 234, 0.8);
+            border-radius: 4px 4px 0 0;
+            font-size: 10px;
+            color: #fff;
+            white-space: nowrap;
+            display: none;
+        }
+
+        .layer-container:hover .layer-label,
+        .layer-container.selected .layer-label {
+            display: block;
         }
 
         /* 播放控制栏 */
@@ -460,8 +498,25 @@
             
             <div class="preview-canvas-container" id="previewContainer">
                 <canvas id="videoCanvas"></canvas>
-                <div class="overlay-container" id="overlayContainer" style="display: none;">
-                    <canvas id="effectCanvas"></canvas>
+                
+                <!-- 特效层 -->
+                <div class="layer-container" id="effectLayer" data-layer="effect">
+                    <div class="layer-label">🎵 特效层</div>
+                    <canvas id="effectCanvas" class="layer-canvas"></canvas>
+                    <div class="resize-handle"></div>
+                </div>
+                
+                <!-- 字幕层 -->
+                <div class="layer-container" id="subtitleLayer" data-layer="subtitle">
+                    <div class="layer-label">📝 字幕层</div>
+                    <canvas id="subtitleCanvas" class="layer-canvas"></canvas>
+                    <div class="resize-handle"></div>
+                </div>
+                
+                <!-- 文字层 -->
+                <div class="layer-container" id="textLayer" data-layer="text">
+                    <div class="layer-label">✏️ 文字层</div>
+                    <canvas id="textLayerCanvas" class="layer-canvas"></canvas>
                     <div class="resize-handle"></div>
                 </div>
             </div>
@@ -734,6 +789,87 @@
                 </div>
             </div>
 
+            <!-- 层控制 -->
+            <div class="panel-section">
+                <h3>🎭 层控制</h3>
+                
+                <!-- 特效层控制 -->
+                <div class="group-title">特效层</div>
+                <div class="setting-row">
+                    <span class="setting-label">显示</span>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="effectLayerVisible" checked>
+                        启用
+                    </label>
+                </div>
+                
+                <!-- 字幕层控制 -->
+                <div class="group-title">字幕层</div>
+                <div class="setting-row">
+                    <span class="setting-label">显示</span>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="subtitleLayerVisible" checked>
+                        启用
+                    </label>
+                </div>
+                
+                <!-- 文字层控制 -->
+                <div class="group-title">文字层</div>
+                <div class="setting-row">
+                    <span class="setting-label">显示</span>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="textLayerVisible" checked>
+                        启用
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">文字内容</span>
+                    <input type="text" id="textLayerContent" value="自定义文字" style="min-width: 150px;">
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">字体大小</span>
+                    <div class="setting-control">
+                        <input type="range" id="textLayerFontSize" min="18" max="72" step="2" value="48">
+                        <span class="value-display" id="textLayerFontSizeValue">48</span>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">文字颜色</span>
+                    <div class="color-picker">
+                        <div class="color-option active" style="background: #ffffff" data-textcolor="#ffffff"></div>
+                        <div class="color-option" style="background: #ffff00" data-textcolor="#ffff00"></div>
+                        <div class="color-option" style="background: #00ff00" data-textcolor="#00ff00"></div>
+                        <div class="color-option" style="background: #00ffff" data-textcolor="#00ffff"></div>
+                        <div class="color-option" style="background: #ff00ff" data-textcolor="#ff00ff"></div>
+                        <div class="color-option" style="background: #ff6600" data-textcolor="#ff6600"></div>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">描边颜色</span>
+                    <div class="color-picker">
+                        <div class="color-option active" style="background: #000000" data-textstroke="#000000"></div>
+                        <div class="color-option" style="background: #ffffff" data-textstroke="#ffffff"></div>
+                        <div class="color-option" style="background: #ff0000" data-textstroke="#ff0000"></div>
+                        <div class="color-option" style="background: #0066ff" data-textstroke="#0066ff"></div>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">描边宽度</span>
+                    <div class="setting-control">
+                        <input type="range" id="textLayerStrokeWidth" min="0" max="6" step="1" value="2">
+                        <span class="value-display" id="textLayerStrokeWidthValue">2</span>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">对齐方式</span>
+                    <select id="textLayerAlign">
+                        <option value="center">居中</option>
+                        <option value="left">左对齐</option>
+                        <option value="right">右对齐</option>
+                    </select>
+                </div>
+            </div>
+
             <!-- 导出设置 -->
             <div class="panel-section">
                 <h3>⚙️ 导出设置</h3>
@@ -928,6 +1064,7 @@
     <script src="js/utils.js"></script>
     <script src="js/subtitles.js"></script>
     <script src="js/effects.js"></script>
+    <script src="js/text-layer.js"></script>
     <script src="js/events.js"></script>
     <script src="js/export.js"></script>
     <script src="js/init.js"></script>

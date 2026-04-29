@@ -449,10 +449,6 @@ function drawEffectToCanvas(time) {
             break;
     }
 
-    const mediaElement = seesound.isVideo ? seesound.videoElement : seesound.audioElement;
-    const currentTime = mediaElement?.currentTime || 0;
-    drawSubtitles(ctx, w, h, currentTime, energy);
-
     ctx.restore();
 }
 
@@ -470,6 +466,21 @@ function initParticles() {
             life: Math.random(),
             maxLife: 0.5 + Math.random() * 0.5
         });
+    }
+}
+
+// 绘制字幕层
+function drawSubtitleLayer(currentTime, energy) {
+    const ctx = seesound.subtitleCtx;
+    const w = seesound.subtitleCanvas.width;
+    const h = seesound.subtitleCanvas.height;
+    
+    if (!ctx || !w || !h) return;
+    
+    ctx.clearRect(0, 0, w, h);
+    
+    if (seesound.subtitleSettings.enabled && seesound.subtitleSettings.subtitles.length > 0) {
+        drawSubtitles(ctx, w, h, currentTime, energy);
     }
 }
 
