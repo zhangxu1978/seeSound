@@ -285,6 +285,44 @@ function saveConfig() {
             transformSpeed: seesound.effectSettings.transformSpeed,
             position: seesound.effectSettings.position
         },
+        subtitleSettings: {
+            enabled: seesound.subtitleSettings.enabled,
+            fontFamily: seesound.subtitleSettings.fontFamily,
+            fontSize: seesound.subtitleSettings.fontSize,
+            color: seesound.subtitleSettings.color,
+            strokeColor: seesound.subtitleSettings.strokeColor,
+            strokeWidth: seesound.subtitleSettings.strokeWidth,
+            effect: seesound.subtitleSettings.effect,
+            position: seesound.subtitleSettings.position
+        },
+        textLayerSettings: {
+            visible: seesound.textLayerSettings.visible,
+            x: seesound.textLayerSettings.x,
+            y: seesound.textLayerSettings.y,
+            width: seesound.textLayerSettings.width,
+            height: seesound.textLayerSettings.height,
+            text: seesound.textLayerSettings.text,
+            fontSize: seesound.textLayerSettings.fontSize,
+            fontFamily: seesound.textLayerSettings.fontFamily,
+            color: seesound.textLayerSettings.color,
+            strokeColor: seesound.textLayerSettings.strokeColor,
+            strokeWidth: seesound.textLayerSettings.strokeWidth,
+            align: seesound.textLayerSettings.align
+        },
+        effectLayerSettings: {
+            visible: seesound.effectLayerSettings.visible,
+            x: seesound.effectLayerSettings.x,
+            y: seesound.effectLayerSettings.y,
+            width: seesound.effectLayerSettings.width,
+            height: seesound.effectLayerSettings.height
+        },
+        subtitleLayerSettings: {
+            visible: seesound.subtitleLayerSettings.visible,
+            x: seesound.subtitleLayerSettings.x,
+            y: seesound.subtitleLayerSettings.y,
+            width: seesound.subtitleLayerSettings.width,
+            height: seesound.subtitleLayerSettings.height
+        },
         overlayPosition: {
             width: seesound.effectLayer ? seesound.effectLayer.style.width : '100%',
             height: seesound.effectLayer ? seesound.effectLayer.style.height : '100%',
@@ -378,6 +416,78 @@ function loadConfigFile(e) {
                 if (config.overlayPosition.height) effectLayer.style.height = config.overlayPosition.height;
                 if (config.overlayPosition.left) effectLayer.style.left = config.overlayPosition.left;
                 if (config.overlayPosition.top) effectLayer.style.top = config.overlayPosition.top;
+            }
+
+            if (config.subtitleSettings) {
+                Object.assign(seesound.subtitleSettings, config.subtitleSettings);
+                
+                document.getElementById('subtitleEnabled').checked = seesound.subtitleSettings.enabled;
+                document.getElementById('subtitleFont').value = seesound.subtitleSettings.fontFamily;
+                document.getElementById('subtitleFontSize').value = seesound.subtitleSettings.fontSize;
+                document.getElementById('subtitleFontSizeValue').textContent = seesound.subtitleSettings.fontSize;
+                document.getElementById('subtitleEffect').value = seesound.subtitleSettings.effect;
+                document.getElementById('subtitleStrokeWidth').value = seesound.subtitleSettings.strokeWidth;
+                document.getElementById('subtitleStrokeWidthValue').textContent = seesound.subtitleSettings.strokeWidth;
+
+                document.querySelectorAll('.color-option[data-subcolor]').forEach(opt => {
+                    opt.classList.remove('active');
+                    if (opt.dataset.subcolor === seesound.subtitleSettings.color) {
+                        opt.classList.add('active');
+                    }
+                });
+
+                document.querySelectorAll('.color-option[data-stroke]').forEach(opt => {
+                    opt.classList.remove('active');
+                    if (opt.dataset.stroke === seesound.subtitleSettings.strokeColor) {
+                        opt.classList.add('active');
+                    }
+                });
+
+                loadSubtitleFont(seesound.subtitleSettings.fontFamily);
+            }
+
+            if (config.textLayerSettings) {
+                Object.assign(seesound.textLayerSettings, config.textLayerSettings);
+                
+                document.getElementById('textLayerVisible').checked = seesound.textLayerSettings.visible;
+                document.getElementById('textLayerContent').value = seesound.textLayerSettings.text;
+                document.getElementById('textLayerFontSize').value = seesound.textLayerSettings.fontSize;
+                document.getElementById('textLayerFontSizeValue').textContent = seesound.textLayerSettings.fontSize;
+                document.getElementById('textLayerStrokeWidth').value = seesound.textLayerSettings.strokeWidth;
+                document.getElementById('textLayerStrokeWidthValue').textContent = seesound.textLayerSettings.strokeWidth;
+                document.getElementById('textLayerAlign').value = seesound.textLayerSettings.align;
+                document.getElementById('textLayerFontFamily').value = seesound.textLayerSettings.fontFamily;
+
+                document.querySelectorAll('.color-option[data-textcolor]').forEach(opt => {
+                    opt.classList.remove('active');
+                    if (opt.dataset.textcolor === seesound.textLayerSettings.color) {
+                        opt.classList.add('active');
+                    }
+                });
+
+                document.querySelectorAll('.color-option[data-textstroke]').forEach(opt => {
+                    opt.classList.remove('active');
+                    if (opt.dataset.textstroke === seesound.textLayerSettings.strokeColor) {
+                        opt.classList.add('active');
+                    }
+                });
+
+                if (seesound.textLayer) {
+                    seesound.textLayer.style.display = seesound.textLayerSettings.visible ? 'block' : 'none';
+                }
+                updateTextLayer();
+            }
+
+            if (config.effectLayerSettings && seesound.effectLayer) {
+                Object.assign(seesound.effectLayerSettings, config.effectLayerSettings);
+                seesound.effectLayer.style.display = seesound.effectLayerSettings.visible ? 'block' : 'none';
+                document.getElementById('effectLayerVisible').checked = seesound.effectLayerSettings.visible;
+            }
+
+            if (config.subtitleLayerSettings && seesound.subtitleLayer) {
+                Object.assign(seesound.subtitleLayerSettings, config.subtitleLayerSettings);
+                seesound.subtitleLayer.style.display = seesound.subtitleLayerSettings.visible ? 'block' : 'none';
+                document.getElementById('subtitleLayerVisible').checked = seesound.subtitleLayerSettings.visible;
             }
 
             initParticles();
