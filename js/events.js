@@ -229,25 +229,19 @@ function bindLayerDragEvents() {
             const newX = e.clientX - containerRect.left - seesound.dragOffset.x;
             const newY = e.clientY - containerRect.top - seesound.dragOffset.y;
             
-            const maxX = containerRect.width - seesound.currentDraggingLayer.offsetWidth;
-            const maxY = containerRect.height - seesound.currentDraggingLayer.offsetHeight;
-            
-            const boundedX = Math.max(0, Math.min(newX, maxX));
-            const boundedY = Math.max(0, Math.min(newY, maxY));
-            
-            seesound.currentDraggingLayer.style.left = `${boundedX}px`;
-            seesound.currentDraggingLayer.style.top = `${boundedY}px`;
+            seesound.currentDraggingLayer.style.left = `${newX}px`;
+            seesound.currentDraggingLayer.style.top = `${newY}px`;
             
             const layerType = seesound.currentDraggingLayer.dataset.layer;
             if (layerType === 'effect') {
-                seesound.effectLayerSettings.x = (boundedX / containerRect.width) * 100;
-                seesound.effectLayerSettings.y = (boundedY / containerRect.height) * 100;
+                seesound.effectLayerSettings.x = (newX / containerRect.width) * 100;
+                seesound.effectLayerSettings.y = (newY / containerRect.height) * 100;
             } else if (layerType === 'subtitle') {
-                seesound.subtitleLayerSettings.x = (boundedX / containerRect.width) * 100;
-                seesound.subtitleLayerSettings.y = (boundedY / containerRect.height) * 100;
+                seesound.subtitleLayerSettings.x = (newX / containerRect.width) * 100;
+                seesound.subtitleLayerSettings.y = (newY / containerRect.height) * 100;
             } else if (layerType === 'text') {
-                seesound.textLayerSettings.x = (boundedX / containerRect.width) * 100;
-                seesound.textLayerSettings.y = (boundedY / containerRect.height) * 100;
+                seesound.textLayerSettings.x = (newX / containerRect.width) * 100;
+                seesound.textLayerSettings.y = (newY / containerRect.height) * 100;
             }
         } else if (seesound.currentResizingLayer) {
             e.preventDefault();
@@ -259,25 +253,20 @@ function bindLayerDragEvents() {
             const newHeight = Math.max(100, seesound.resizeStartSize.height + deltaY);
             
             const containerRect = document.getElementById('previewContainer').getBoundingClientRect();
-            const maxWidth = containerRect.width - seesound.currentResizingLayer.offsetLeft;
-            const maxHeight = containerRect.height - seesound.currentResizingLayer.offsetTop;
             
-            const boundedWidth = Math.min(newWidth, maxWidth);
-            const boundedHeight = Math.min(newHeight, maxHeight);
-            
-            seesound.currentResizingLayer.style.width = `${boundedWidth}px`;
-            seesound.currentResizingLayer.style.height = `${boundedHeight}px`;
+            seesound.currentResizingLayer.style.width = `${newWidth}px`;
+            seesound.currentResizingLayer.style.height = `${newHeight}px`;
             
             const layerType = seesound.currentResizingLayer.dataset.layer;
             if (layerType === 'effect') {
-                seesound.effectLayerSettings.width = (boundedWidth / containerRect.width) * 100;
-                seesound.effectLayerSettings.height = (boundedHeight / containerRect.height) * 100;
+                seesound.effectLayerSettings.width = (newWidth / containerRect.width) * 100;
+                seesound.effectLayerSettings.height = (newHeight / containerRect.height) * 100;
             } else if (layerType === 'subtitle') {
-                seesound.subtitleLayerSettings.width = (boundedWidth / containerRect.width) * 100;
-                seesound.subtitleLayerSettings.height = (boundedHeight / containerRect.height) * 100;
+                seesound.subtitleLayerSettings.width = (newWidth / containerRect.width) * 100;
+                seesound.subtitleLayerSettings.height = (newHeight / containerRect.height) * 100;
             } else if (layerType === 'text') {
-                seesound.textLayerSettings.width = (boundedWidth / containerRect.width) * 100;
-                seesound.textLayerSettings.height = (boundedHeight / containerRect.height) * 100;
+                seesound.textLayerSettings.width = (newWidth / containerRect.width) * 100;
+                seesound.textLayerSettings.height = (newHeight / containerRect.height) * 100;
             }
         }
     });
