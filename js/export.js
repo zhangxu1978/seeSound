@@ -45,7 +45,7 @@ function setupCanvasSize(width, height) {
     const container = document.getElementById('previewContainer');
     const maxWidth = container.clientWidth - 40;
     const maxHeight = container.clientHeight - 40;
-    
+
     const scale = Math.min(maxWidth / width, maxHeight / height, 1);
     const canvasWidth = width * scale;
     const canvasHeight = height * scale;
@@ -64,29 +64,36 @@ function setupCanvasSize(width, height) {
         seesound.effectLayer.style.left = '20px';
         seesound.effectLayer.style.top = '20px';
     }
-    
+
     if (seesound.subtitleLayer) {
         seesound.subtitleLayer.style.width = canvasWidth + 'px';
         seesound.subtitleLayer.style.height = canvasHeight + 'px';
         seesound.subtitleLayer.style.left = '20px';
         seesound.subtitleLayer.style.top = '20px';
     }
-    
-    if (seesound.textLayer) {
-        seesound.textLayer.style.width = canvasWidth + 'px';
-        seesound.textLayer.style.height = canvasHeight + 'px';
-        seesound.textLayer.style.left = '20px';
-        seesound.textLayer.style.top = '20px';
-    }
-    
+
     if (seesound.subtitleCanvas) {
         seesound.subtitleCanvas.width = width;
         seesound.subtitleCanvas.height = height;
     }
-    
+
+    const originalWidth = seesound.originalCanvasWidth || width;
+    const originalHeight = seesound.originalCanvasHeight || height;
+
+    if (!seesound.originalCanvasWidth) {
+        seesound.originalCanvasWidth = width;
+        seesound.originalCanvasHeight = height;
+    }
+
     if (seesound.textLayerCanvas) {
-        seesound.textLayerCanvas.width = width;
-        seesound.textLayerCanvas.height = height;
+        seesound.textLayerCanvas.width = originalWidth / 2;
+        seesound.textLayerCanvas.height = originalHeight / 2;
+    }
+    if (seesound.textLayer) {
+        seesound.textLayer.style.width = originalWidth / 2 + 'px';
+        seesound.textLayer.style.height = originalHeight / 2 + 'px';
+        seesound.textLayer.style.left = '20px';
+        seesound.textLayer.style.top = '20px';
     }
 }
 
@@ -478,7 +485,11 @@ async function exportVideoBrowser() {
         if (!seesound.audioContext) initAudioContext();
 
         const effectLayer = seesound.effectLayer;
+        const subtitleLayer = seesound.subtitleLayer;
+        const textLayer = seesound.textLayer;
         const effectLayerRect = effectLayer ? effectLayer.getBoundingClientRect() : null;
+        const subtitleLayerRect = subtitleLayer ? subtitleLayer.getBoundingClientRect() : null;
+        const textLayerRect = textLayer ? textLayer.getBoundingClientRect() : null;
         const canvasRect = seesound.videoCanvas.getBoundingClientRect();
 
         const scaleX = seesound.videoCanvas.width / canvasRect.width;
@@ -487,6 +498,14 @@ async function exportVideoBrowser() {
         const effectLayerY = effectLayerRect ? (effectLayerRect.top - canvasRect.top) * scaleY : 0;
         const effectLayerW = effectLayerRect ? effectLayerRect.width * scaleX : seesound.videoCanvas.width;
         const effectLayerH = effectLayerRect ? effectLayerRect.height * scaleY : seesound.videoCanvas.height;
+        const subtitleLayerX = subtitleLayerRect ? (subtitleLayerRect.left - canvasRect.left) * scaleX : 0;
+        const subtitleLayerY = subtitleLayerRect ? (subtitleLayerRect.top - canvasRect.top) * scaleY : 0;
+        const subtitleLayerW = subtitleLayerRect ? subtitleLayerRect.width * scaleX : seesound.videoCanvas.width;
+        const subtitleLayerH = subtitleLayerRect ? subtitleLayerRect.height * scaleY : seesound.videoCanvas.height;
+        const textLayerX = textLayerRect ? (textLayerRect.left - canvasRect.left) * scaleX : 0;
+        const textLayerY = textLayerRect ? (textLayerRect.top - canvasRect.top) * scaleY : 0;
+        const textLayerW = textLayerRect ? textLayerRect.width * scaleX : seesound.videoCanvas.width / 2;
+        const textLayerH = textLayerRect ? textLayerRect.height * scaleY : seesound.videoCanvas.height / 2;
 
         let audioStream;
         try {
@@ -620,10 +639,16 @@ async function exportVideoBrowser() {
             drawTextLayer();
 
             if (seesound.subtitleCanvas) {
-                ctx.drawImage(seesound.subtitleCanvas, 0, 0, w, h);
+                seesound.subtitleCanvas.width = subtitleLayerW;
+                seesound.subtitleCanvas.height = subtitleLayerH;
+                drawSubtitleLayer(currentTime, energy);
+                ctx.drawImage(seesound.subtitleCanvas, subtitleLayerX, subtitleLayerY, subtitleLayerW, subtitleLayerH);
             }
             if (seesound.textLayerCanvas) {
-                ctx.drawImage(seesound.textLayerCanvas, 0, 0, w, h);
+                seesound.textLayerCanvas.width = textLayerW;
+                seesound.textLayerCanvas.height = textLayerH;
+                drawTextLayer();
+                ctx.drawImage(seesound.textLayerCanvas, textLayerX, textLayerY, textLayerW, textLayerH);
             }
         }
 
