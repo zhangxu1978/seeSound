@@ -779,13 +779,68 @@
             <!-- 位置设置 -->
             <div class="panel-section">
                 <h3>📍 位置预设</h3>
-                <div class="position-presets">
-                    <button class="preset-btn active" data-position="fullscreen">全屏</button>
-                    <button class="preset-btn" data-position="bottom">底部</button>
-                    <button class="preset-btn" data-position="top">顶部</button>
-                    <button class="preset-btn" data-position="center">居中</button>
-                    <button class="preset-btn" data-position="left">左侧</button>
-                    <button class="preset-btn" data-position="right">右侧</button>
+                
+                <!-- 特效层位置预设 -->
+                <div class="group-title">特效层</div>
+                <div class="setting-row">
+                    <span class="setting-label">启用</span>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="effectPositionEnabled" checked>
+                        启用
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">位置预设</span>
+                    <select id="effectPositionPreset">
+                        <option value="fullscreen">全屏</option>
+                        <option value="bottom">底部</option>
+                        <option value="top">顶部</option>
+                        <option value="center">居中</option>
+                        <option value="left">左侧</option>
+                        <option value="right">右侧</option>
+                    </select>
+                </div>
+                
+                <!-- 字幕层位置预设 -->
+                <div class="group-title">字幕层</div>
+                <div class="setting-row">
+                    <span class="setting-label">启用</span>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="subtitlePositionEnabled">
+                        启用
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">位置预设</span>
+                    <select id="subtitlePositionPreset">
+                        <option value="fullscreen">全屏</option>
+                        <option value="bottom">底部</option>
+                        <option value="top">顶部</option>
+                        <option value="center">居中</option>
+                        <option value="left">左侧</option>
+                        <option value="right">右侧</option>
+                    </select>
+                </div>
+                
+                <!-- 文字层位置预设 -->
+                <div class="group-title">文字层</div>
+                <div class="setting-row">
+                    <span class="setting-label">启用</span>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="textPositionEnabled">
+                        启用
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">位置预设</span>
+                    <select id="textPositionPreset">
+                        <option value="fullscreen">全屏</option>
+                        <option value="bottom">底部</option>
+                        <option value="top">顶部</option>
+                        <option value="center">居中</option>
+                        <option value="left">左侧</option>
+                        <option value="right">右侧</option>
+                    </select>
                 </div>
             </div>
 

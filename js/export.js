@@ -91,8 +91,16 @@ function setupCanvasSize(width, height) {
 }
 
 // 应用位置预设
-function applyPositionPreset(position) {
-    const layer = seesound.effectLayer;
+function applyPositionPreset(layerType, position) {
+    let layer;
+    if (layerType === 'effect') {
+        layer = seesound.effectLayer;
+    } else if (layerType === 'subtitle') {
+        layer = seesound.subtitleLayer;
+    } else if (layerType === 'text') {
+        layer = seesound.textLayer;
+    }
+    
     if (!layer) return;
 
     const canvasWidth = parseInt(seesound.videoCanvas.style.width) || 1280;

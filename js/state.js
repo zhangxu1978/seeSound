@@ -85,7 +85,8 @@ const effectLayerSettings = {
     x: 0,
     y: 0,
     width: 100,
-    height: 100
+    height: 100,
+    positionEnabled: true
 };
 
 const subtitleLayerSettings = {
@@ -93,7 +94,8 @@ const subtitleLayerSettings = {
     x: 0,
     y: 0,
     width: 100,
-    height: 100
+    height: 100,
+    positionEnabled: false
 };
 
 const textLayerSettings = {
@@ -108,7 +110,8 @@ const textLayerSettings = {
     color: '#ffffff',
     strokeColor: '#000000',
     strokeWidth: 2,
-    align: 'center'
+    align: 'center',
+    positionEnabled: false
 };
 
 // 层拖拽状态
