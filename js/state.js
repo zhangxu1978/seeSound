@@ -43,6 +43,7 @@ let subtitles = [];
 const subtitleScrollState = {
     isAnimating: false,
     animationStartTime: 0,
+    animationDuration: 0.5,
     prevSubIndex: -1,
     prevPrevText: '',
     prevCurrentText: '',

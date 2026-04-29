@@ -573,6 +573,30 @@ async function exportVideoBrowser() {
                 seesound.analyser.getByteFrequencyData(seesound.dataArray);
             }
 
+            let bass = 0, mid = 0, treble = 0, total = 0;
+            if (seesound.dataArray && seesound.dataArray.length > 0) {
+                const bassCount = Math.floor(seesound.bufferLength * 0.2);
+                const midCount = Math.floor(seesound.bufferLength * 0.5);
+                for (let i = 0; i < seesound.bufferLength; i++) {
+                    total += seesound.dataArray[i];
+                    if (i < bassCount) bass += seesound.dataArray[i];
+                    else if (i < midCount) mid += seesound.dataArray[i];
+                    else treble += seesound.dataArray[i];
+                }
+                bass = bass / bassCount / 255;
+                mid = mid / (midCount - bassCount) / 255;
+                treble = treble / (seesound.bufferLength - midCount) / 255;
+                total = total / seesound.bufferLength / 255;
+            }
+
+            const energy = {
+                bass: bass * seesound.effectSettings.sensitivity,
+                mid: mid * seesound.effectSettings.sensitivity,
+                treble: treble * seesound.effectSettings.sensitivity,
+                average: total * seesound.effectSettings.sensitivity,
+                data: seesound.dataArray || new Uint8Array(seesound.bufferLength).fill(128)
+            };
+
             ctx.save();
             ctx.beginPath();
             ctx.rect(effectLayerX, effectLayerY, effectLayerW, effectLayerH);
@@ -590,6 +614,17 @@ async function exportVideoBrowser() {
             seesound.effectCanvas.height = origEffectH;
 
             ctx.restore();
+
+            const currentTime = (Date.now() - startTime) * 0.001;
+            drawSubtitleLayer(currentTime, energy);
+            drawTextLayer();
+
+            if (seesound.subtitleCanvas) {
+                ctx.drawImage(seesound.subtitleCanvas, 0, 0, w, h);
+            }
+            if (seesound.textLayerCanvas) {
+                ctx.drawImage(seesound.textLayerCanvas, 0, 0, w, h);
+            }
         }
 
         let recordingAnimationId = null;

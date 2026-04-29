@@ -53,30 +53,38 @@ function drawTextLayer() {
     ctx.lineWidth = settings.strokeWidth;
     ctx.lineJoin = 'round';
     
-    let x, y;
+    const lines = settings.text.split('\n');
+    const lineHeight = settings.fontSize * 1.5;
+    const totalHeight = lines.length * lineHeight;
+    
+    let x, startY;
     
     switch (settings.align) {
         case 'left':
             x = 20;
             ctx.textAlign = 'left';
+            startY = (h - totalHeight) / 2 + settings.fontSize;
             break;
         case 'right':
             x = w - 20;
             ctx.textAlign = 'right';
+            startY = (h - totalHeight) / 2 + settings.fontSize;
             break;
         case 'center':
         default:
             x = w / 2;
             ctx.textAlign = 'center';
+            startY = (h - totalHeight) / 2 + settings.fontSize;
             break;
     }
     
-    y = h / 2 + settings.fontSize / 3;
-    
-    if (settings.strokeWidth > 0) {
-        ctx.strokeText(settings.text, x, y);
-    }
-    ctx.fillText(settings.text, x, y);
+    lines.forEach((line, index) => {
+        const y = startY + index * lineHeight;
+        if (settings.strokeWidth > 0) {
+            ctx.strokeText(line, x, y);
+        }
+        ctx.fillText(line, x, y);
+    });
 }
 
 // 更新文字层画布大小
