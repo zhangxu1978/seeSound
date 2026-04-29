@@ -1,5 +1,37 @@
 // 文字层处理模块
 
+async function loadTextLayerFont(fontFamily) {
+    if (seesound.loadedFonts.has(fontFamily)) {
+        return;
+    }
+
+    try {
+        const fontPath = `/font/${fontFamily}`;
+        const font = new FontFace('textlayer-font', `url(${fontPath})`);
+        await font.load();
+        document.fonts.add(font);
+        seesound.loadedFonts.add(fontFamily);
+        console.log(`文字层字体加载成功: ${fontFamily}`);
+    } catch (err) {
+        console.warn(`文字层字体加载失败: ${fontFamily}`, err);
+    }
+}
+
+function isCustomFont(fontFamily) {
+    return fontFamily.endsWith('.ttf') || fontFamily.endsWith('.otf');
+}
+
+function getTextLayerFontFamily() {
+    const fontFamily = seesound.textLayerSettings.fontFamily;
+    if (!fontFamily) return 'Microsoft YaHei';
+
+    if (isCustomFont(fontFamily)) {
+        return seesound.loadedFonts.has(fontFamily) ? 'textlayer-font' : 'Microsoft YaHei';
+    }
+
+    return fontFamily;
+}
+
 // 绘制文字层
 function drawTextLayer() {
     const ctx = seesound.textLayerCtx;
@@ -13,8 +45,9 @@ function drawTextLayer() {
     const settings = seesound.textLayerSettings;
     
     if (!settings.text || settings.text.trim() === '') return;
-    
-    ctx.font = `${settings.fontSize}px ${settings.fontFamily}`;
+
+    const fontFamily = getTextLayerFontFamily();
+    ctx.font = `${settings.fontSize}px "${fontFamily}", sans-serif`;
     ctx.fillStyle = settings.color;
     ctx.strokeStyle = settings.strokeColor;
     ctx.lineWidth = settings.strokeWidth;

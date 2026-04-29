@@ -156,7 +156,15 @@ function bindLayerEvents() {
     document.getElementById('textLayerAlign')?.addEventListener('change', (e) => {
         seesound.textLayerSettings.align = e.target.value;
     });
-    
+
+    document.getElementById('textLayerFontFamily')?.addEventListener('change', async (e) => {
+        const fontFamily = e.target.value;
+        seesound.textLayerSettings.fontFamily = fontFamily;
+        if (fontFamily.endsWith('.ttf') || fontFamily.endsWith('.otf')) {
+            await loadTextLayerFont(fontFamily);
+        }
+    });
+
     document.querySelectorAll('.color-option[data-textcolor]').forEach(opt => {
         opt.addEventListener('click', () => {
             document.querySelectorAll('.color-option[data-textcolor]').forEach(o => o.classList.remove('active'));
