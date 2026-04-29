@@ -475,7 +475,7 @@ function loadConfigFile(e) {
                 if (seesound.textLayer) {
                     seesound.textLayer.style.display = seesound.textLayerSettings.visible ? 'block' : 'none';
                 }
-                updateTextLayer();
+                drawTextLayer();
             }
 
             if (config.effectLayerSettings && seesound.effectLayer) {
