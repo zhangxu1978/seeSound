@@ -85,33 +85,30 @@ const effectLayerSettings = {
     x: 0,
     y: 0,
     width: 100,
-    height: 100,
-    positionEnabled: true
+    height: 100
 };
 
 const subtitleLayerSettings = {
     visible: true,
     x: 0,
     y: 0,
-    width: 100,
-    height: 100,
-    positionEnabled: false
+    width: 50,
+    height: 50
 };
 
 const textLayerSettings = {
     visible: true,
     x: 0,
     y: 0,
-    width: 100,
-    height: 100,
+    width: 50,
+    height: 50,
     text: '自定义文字',
     fontSize: 48,
     fontFamily: 'Microsoft YaHei',
     color: '#ffffff',
     strokeColor: '#000000',
     strokeWidth: 2,
-    align: 'center',
-    positionEnabled: false
+    align: 'center'
 };
 
 // 层拖拽状态

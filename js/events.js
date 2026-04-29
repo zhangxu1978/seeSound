@@ -357,47 +357,17 @@ function bindEvents() {
     bindSlider('transformSpeed', 'transformSpeedValue', 'transformSpeed');
 
     // 特效层位置预设
-    document.getElementById('effectPositionEnabled')?.addEventListener('change', (e) => {
-        seesound.effectLayerSettings.positionEnabled = e.target.checked;
-        if (e.target.checked) {
-            const position = document.getElementById('effectPositionPreset').value;
-            applyPositionPreset('effect', position);
-        }
-    });
-    
     document.getElementById('effectPositionPreset')?.addEventListener('change', (e) => {
-        if (seesound.effectLayerSettings.positionEnabled) {
-            applyPositionPreset('effect', e.target.value);
-        }
+        applyPositionPreset('effect', e.target.value);
     });
     
     // 字幕层位置预设
-    document.getElementById('subtitlePositionEnabled')?.addEventListener('change', (e) => {
-        seesound.subtitleLayerSettings.positionEnabled = e.target.checked;
-        if (e.target.checked) {
-            const position = document.getElementById('subtitlePositionPreset').value;
-            applyPositionPreset('subtitle', position);
-        }
-    });
-    
     document.getElementById('subtitlePositionPreset')?.addEventListener('change', (e) => {
-        if (seesound.subtitleLayerSettings.positionEnabled) {
-            applyPositionPreset('subtitle', e.target.value);
-        }
+        applyPositionPreset('subtitle', e.target.value);
     });
     
     // 文字层位置预设
-    document.getElementById('textPositionEnabled')?.addEventListener('change', (e) => {
-        seesound.textLayerSettings.positionEnabled = e.target.checked;
-        if (e.target.checked) {
-            const position = document.getElementById('textPositionPreset').value;
-            applyPositionPreset('text', position);
-        }
-    });
-    
     document.getElementById('textPositionPreset')?.addEventListener('change', (e) => {
-        if (seesound.textLayerSettings.positionEnabled) {
-            applyPositionPreset('text', e.target.value);
-        }
+        applyPositionPreset('text', e.target.value);
     });
 }
