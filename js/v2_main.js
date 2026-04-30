@@ -22,6 +22,7 @@ const v2State = {
     lyricColor: '#ffffff',
     lyricStrokeColor: '#000000',
     lyricStrokeWidth: 2,
+    lyricOffsetY: 0,
     
     // 文字内容
     dateGenre: '2024 | 流行',
@@ -34,7 +35,8 @@ const v2State = {
     // 波形设置
     waveColor: 'orange',
     waveHeight: 60,
-    waveBars: 64
+    waveBars: 64,
+    waveOffsetY: 0
 };
 
 // 波形颜色主题
@@ -151,6 +153,16 @@ function bindEvents() {
     document.getElementById('waveBars').addEventListener('input', (e) => {
         v2State.waveBars = parseInt(e.target.value);
         document.getElementById('waveBarsValue').textContent = v2State.waveBars;
+    });
+    
+    document.getElementById('waveOffsetY').addEventListener('input', (e) => {
+        v2State.waveOffsetY = parseInt(e.target.value);
+        document.getElementById('waveOffsetYValue').textContent = v2State.waveOffsetY;
+    });
+    
+    document.getElementById('lyricOffsetY').addEventListener('input', (e) => {
+        v2State.lyricOffsetY = parseInt(e.target.value);
+        document.getElementById('lyricOffsetYValue').textContent = v2State.lyricOffsetY;
     });
     
     // 歌词颜色选择
@@ -525,45 +537,61 @@ function drawVinylRecord(ctx, centerX, centerY, radius, rotationAngle, coverImag
 
 // 绘制滚动歌词
 function drawScrollingLyrics(ctx, lyrics, currentTime, x, y, width) {
+    const adjustedY = y + v2State.lyricOffsetY;
     if (!lyrics || lyrics.length === 0) {
         ctx.font = `${v2State.lyricFontSize}px 杨任东竹石体-Regular, Microsoft YaHei`;
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.fillText('[一句话歌词金句 - 可编辑]', x + width / 2, y);
+        ctx.fillText('[一句话歌词金句 - 可编辑]', x + width / 2, adjustedY);
         return;
     }
     
     const currentLyric = findCurrentLyric(lyrics, currentTime);
-    const prevIndex = lyrics.findIndex(l => l.time <= currentTime) - 1;
-    const nextIndex = lyrics.findIndex(l => l.time > currentTime);
+    if (!currentLyric) return;
     
     ctx.font = `${v2State.lyricFontSize}px 杨任东竹石体-Regular, Microsoft YaHei`;
     ctx.textAlign = 'center';
     
-    // 上一句歌词（淡出）
-    if (prevIndex >= 0) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.fillText(lyrics[prevIndex].text, x + width / 2, y - 45);
-    }
-    
-    // 当前歌词（高亮）
-    if (currentLyric) {
+    let displayText = currentLyric.text;
+    const textWidth = ctx.measureText(displayText).width;
+    if (textWidth > width * 0.9) {
+        displayText = displayText + '　';
+        while (ctx.measureText(displayText).width < width * 0.9) {
+            displayText = displayText + currentLyric.text + '　';
+        }
+        const totalWidth = ctx.measureText(displayText).width;
+        const scrollSpeed = 50;
+        const progress = (currentTime * 1000) % (totalWidth + width);
+        const offsetX = -progress + width / 2;
+        
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x - 10, adjustedY - v2State.lyricFontSize, width + 20, v2State.lyricFontSize * 1.5);
+        ctx.clip();
+        
         ctx.strokeStyle = v2State.lyricStrokeColor;
         ctx.lineWidth = v2State.lyricStrokeWidth * 2;
         ctx.lineJoin = 'round';
-        ctx.strokeText(currentLyric.text, x + width / 2, y);
+        ctx.strokeText(displayText, x + offsetX, adjustedY);
         
         ctx.fillStyle = v2State.lyricColor;
         ctx.shadowBlur = 15;
         ctx.shadowColor = v2State.lyricColor;
-        ctx.fillText(currentLyric.text, x + width / 2, y);
+        ctx.fillText(displayText, x + offsetX, adjustedY);
         ctx.shadowBlur = 0;
-    }
-    
-    // 下一句歌词（淡入）
-    if (nextIndex >= 0 && nextIndex < lyrics.length) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.fillText(lyrics[nextIndex].text, x + width / 2, y + 45);
+        
+        ctx.restore();
+    } else {
+        ctx.strokeStyle = v2State.lyricStrokeColor;
+        ctx.lineWidth = v2State.lyricStrokeWidth * 2;
+        ctx.lineJoin = 'round';
+        ctx.strokeText(displayText, x + width / 2, adjustedY);
+        
+        ctx.fillStyle = v2State.lyricColor;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = v2State.lyricColor;
+        ctx.fillText(displayText, x + width / 2, adjustedY);
+        ctx.shadowBlur = 0;
     }
 }
 
@@ -663,17 +691,8 @@ function drawAudioWave(ctx, x, y, width, height, dataArray, barCount) {
 
 // 绘制 Logo
 function drawLogo(ctx, x, y, size, logoImage) {
-    if (logoImage) {
-        ctx.drawImage(logoImage, x, y, size, size);
-    } else {
-        // 默认 Logo
-        ctx.font = `${size * 0.6}px Arial`;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText('Suno', x + size * 0.08, y + size * 0.55);
-        ctx.font = `${size * 0.25}px Arial`;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.fillText('AI Music', x + size * 0.08, y + size * 0.75);
-    }
+    if (!logoImage) return;
+    ctx.drawImage(logoImage, x, y, size, size);
 }
 
 // 主绘制函数
@@ -752,7 +771,7 @@ function draw(time) {
     
     // 绘制音频波形
     const waveX = w * 0.4;
-    const waveY = h - 80;
+    const waveY = h - 80 - v2State.waveOffsetY;
     const waveWidth = w * 0.55;
     const waveHeight = v2State.waveHeight;
     
@@ -1113,7 +1132,7 @@ async function exportVideoBrowserV2() {
             ctx.fillText(`制作人: ${v2State.producer}`, infoX, infoY + 50);
             
             const waveX = w * 0.4;
-            const waveY = h - 80;
+            const waveY = h - 80 - v2State.waveOffsetY;
             const waveWidth = w * 0.55;
             drawAudioWave(ctx, waveX, waveY, waveWidth, v2State.waveHeight, seesound.dataArray, v2State.waveBars);
 
