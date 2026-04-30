@@ -2,7 +2,7 @@
 // 全局状态和配置
 
 // 全局变量
-let audioContext, analyser, source;
+let audioContext, analyser, source, sourceElement;
 let videoElement, audioElement;
 let videoCanvas, effectCanvas, videoCtx, effectCtx;
 let isPlaying = false;
@@ -147,7 +147,7 @@ const FONT_LIST = [
 
 // 导出所有状态和配置
 window.seesound = {
-    audioContext, analyser, source,
+    audioContext, analyser, source, sourceElement,
     videoElement, audioElement,
     videoCanvas, effectCanvas, videoCtx, effectCtx,
     isPlaying, animationId, particles, brickPositions,

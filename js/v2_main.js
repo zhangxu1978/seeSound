@@ -432,14 +432,19 @@ function connectAudioSource(element) {
         seesound.bufferLength = seesound.analyser.frequencyBinCount;
         seesound.dataArray = new Uint8Array(seesound.bufferLength);
     }
-    
+
+    if (seesound.sourceElement === element) {
+        return;
+    }
+
     if (seesound.source) {
         try {
             seesound.source.disconnect();
         } catch (e) {}
     }
-    
+
     try {
+        seesound.sourceElement = element;
         seesound.source = seesound.audioContext.createMediaElementSource(element);
         seesound.source.connect(seesound.analyser);
         seesound.analyser.connect(seesound.audioContext.destination);
@@ -820,7 +825,11 @@ async function exportVideoV2() {
 
 // 浏览器录制导出 V2 - 修复版本
 async function exportVideoBrowserV2() {
-    if (!seesound.currentFile) return;
+    console.log('[EXPORT_V2] ====== 开始导出 ======');
+    if (!seesound.currentFile) {
+        console.error('[EXPORT_V2] 没有加载文件!');
+        return;
+    }
 
     const progressEl = document.getElementById('exportProgress');
     const progressBar = document.getElementById('progressBarFill');
@@ -831,52 +840,111 @@ async function exportVideoBrowserV2() {
     exportBtn.disabled = true;
 
     if (!window.MediaRecorder) {
+        console.error('[EXPORT_V2] 浏览器不支持MediaRecorder!');
         progressText.textContent = '浏览器不支持录制，使用传统导出';
         await exportVideoServerV2();
         return;
     }
+    console.log('[EXPORT_V2] MediaRecorder可用');
 
     try {
         progressText.textContent = '准备录制...';
         progressBar.style.width = '5%';
 
         const mediaElement = seesound.isVideo ? seesound.videoElement : seesound.audioElement;
-        const wasPlaying = seesound.isPlaying;
+        console.log('[EXPORT_V2] mediaElement:', mediaElement.tagName, 'src:', mediaElement.src ? '有' : '无');
+        console.log('[EXPORT_V2] seesound.isVideo:', seesound.isVideo);
+        console.log('[EXPORT_V2] mediaElement.duration:', mediaElement.duration);
+        console.log('[EXPORT_V2] mediaElement.readyState:', mediaElement.readyState);
 
+        const wasPlaying = seesound.isPlaying;
+        console.log('[EXPORT_V2] wasPlaying:', wasPlaying);
+
+        console.log('[EXPORT_V2] 暂停并重置媒体元素');
         mediaElement.pause();
+        console.log('[EXPORT_V2] mediaElement.pause()后 - paused:', mediaElement.paused, 'ended:', mediaElement.ended, 'currentTime:', mediaElement.currentTime);
+        
         mediaElement.currentTime = 0;
+        console.log('[EXPORT_V2] 设置currentTime=0后 - currentTime:', mediaElement.currentTime);
+        
         seesound.isPlaying = false;
         document.getElementById('playBtn').textContent = '▶';
         v2State.rotationAngle = 0;
 
+        console.log('[EXPORT_V2] ====== 初始化音频上下文 ======');
         if (!seesound.audioContext) {
+            console.log('[EXPORT_V2] 创建新的audioContext');
             seesound.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             seesound.analyser = seesound.audioContext.createAnalyser();
             seesound.analyser.fftSize = 256;
             seesound.dataArray = new Uint8Array(seesound.analyser.frequencyBinCount);
         }
-
-        let audioStream;
-        try {
-            const dest = seesound.audioContext.createMediaStreamDestination();
-            if (seesound.source) seesound.source.connect(dest);
-            seesound.analyser.connect(dest);
-            audioStream = dest.stream;
-        } catch (e) {
-            console.warn('音频录制可能有问题:', e);
+        console.log('[EXPORT_V2] audioContext状态:', seesound.audioContext.state);
+        console.log('[EXPORT_V2] audioContext.sampleRate:', seesound.audioContext.sampleRate);
+        console.log('[EXPORT_V2] seesound.source:', seesound.source ? '有' : '无');
+        console.log('[EXPORT_V2] seesound.analyser:', seesound.analyser ? '有' : '无');
+        console.log('[EXPORT_V2] seesound.sourceElement:', seesound.sourceElement ? seesound.sourceElement.tagName : '无');
+        
+        if (seesound.audioContext.state === 'suspended') {
+            console.log('[EXPORT_V2] audioContext被暂停，恢复中...');
+            await seesound.audioContext.resume();
+            console.log('[EXPORT_V2] audioContext已恢复, 状态:', seesound.audioContext.state);
         }
 
+        let audioContext = seesound.audioContext;
+        let source = seesound.source;
+        let analyser = seesound.analyser;
+
+        let audioStream = null;
+        console.log('[EXPORT_V2] ====== 创建音频流 ======');
+        try {
+            console.log('[EXPORT_V2] 创建MediaStreamDestination');
+            const dest = audioContext.createMediaStreamDestination();
+            console.log('[EXPORT_V2] dest.stream:', dest.stream ? '有音频轨道' : '无');
+            console.log('[EXPORT_V2] dest.stream.getAudioTracks().length:', dest.stream.getAudioTracks().length);
+            
+            if (source) {
+                console.log('[EXPORT_V2] 断开source当前连接');
+                try { source.disconnect(); } catch (e) { console.warn('[EXPORT_V2] source.disconnect失败:', e); }
+                console.log('[EXPORT_V2] 连接source -> analyser');
+                source.connect(analyser);
+            } else {
+                console.warn('[EXPORT_V2] source为空，跳过连接');
+            }
+            
+            console.log('[EXPORT_V2] 断开analyser当前连接');
+            try { analyser.disconnect(); } catch (e) { console.warn('[EXPORT_V2] analyser.disconnect失败:', e); }
+            
+            console.log('[EXPORT_V2] 连接analyser -> dest');
+            analyser.connect(dest);
+            console.log('[EXPORT_V2] 连接analyser -> destination(扬声器)');
+            analyser.connect(audioContext.destination);
+            
+            audioStream = dest.stream;
+            console.log('[EXPORT_V2] audioStream创建成功, 音频轨道数:', audioStream.getAudioTracks().length);
+        } catch (e) {
+            console.error('[EXPORT_V2] 音频流创建失败:', e);
+            console.warn('[EXPORT_V2] 音频录制可能有问题:', e);
+        }
+
+        console.log('[EXPORT_V2] ====== 创建视频流 ======');
         const videoStream = seesound.videoCanvas.captureStream(30);
+        console.log('[EXPORT_V2] videoStream视频轨道数:', videoStream.getVideoTracks().length);
 
         let combinedStream;
         if (audioStream) {
+            console.log('[EXPORT_V2] 合并视频流和音频流');
             combinedStream = new MediaStream([
                 ...videoStream.getVideoTracks(),
                 ...audioStream.getAudioTracks()
             ]);
         } else {
+            console.warn('[EXPORT_V2] audioStream为空，只使用视频流');
             combinedStream = videoStream;
         }
+        console.log('[EXPORT_V2] combinedStream总轨道数:', combinedStream.getTracks().length);
+        console.log('[EXPORT_V2] combinedStream视频轨道:', combinedStream.getVideoTracks().length);
+        console.log('[EXPORT_V2] combinedStream音频轨道:', combinedStream.getAudioTracks().length);
 
         const mimeTypes = [
             'video/webm;codecs=vp9,opus',
@@ -884,41 +952,111 @@ async function exportVideoBrowserV2() {
             'video/webm'
         ];
         let selectedMimeType = '';
+        console.log('[EXPORT_V2] ====== 选择MIME类型 ======');
         for (const type of mimeTypes) {
-            if (MediaRecorder.isTypeSupported(type)) {
+            const supported = MediaRecorder.isTypeSupported(type);
+            console.log('[EXPORT_V2] 支持', type, ':', supported);
+            if (supported && !selectedMimeType) {
                 selectedMimeType = type;
-                break;
             }
         }
+        console.log('[EXPORT_V2] 最终选择的MIME:', selectedMimeType || '无(使用默认)');
 
         const recorder = new MediaRecorder(combinedStream, {
-            mimeType: selectedMimeType,
+            mimeType: selectedMimeType || undefined,
             videoBitsPerSecond: 8 * 1024 * 1024
         });
+        console.log('[EXPORT_V2] MediaRecorder创建完成, state:', recorder.state);
 
         const chunks = [];
+        console.log('[EXPORT_V2] chunks数组初始长度:', chunks.length);
+        
         recorder.ondataavailable = (e) => {
+            console.log('[EXPORT_V2] ondataavailable - 数据大小:', e.data.size);
             if (e.data.size > 0) {
                 chunks.push(e.data);
+                console.log('[EXPORT_V2] chunks数组当前长度:', chunks.length);
             }
+        };
+        
+        let recordingAnimationId = null;
+        let recorderStarted = false;
+        let startHandlerExecuted = false;
+
+        recorder.onstart = () => {
+            console.log('[EXPORT_V2] ====== recorder.onstart 触发 ======');
+            console.log('[EXPORT_V2] recorder.state:', recorder.state);
+            console.log('[EXPORT_V2] startHandlerExecuted:', startHandlerExecuted);
+            
+            if (startHandlerExecuted) {
+                console.log('[EXPORT_V2] onstart已被执行，跳过');
+                return;
+            }
+            startHandlerExecuted = true;
+            recorderStarted = true;
+            recordingActive = true;
+            console.log('[EXPORT_V2] recordingActive设为true');
+            
+            console.log('[EXPORT_V2] mediaElement.play()前 - paused:', mediaElement.paused, 'ended:', mediaElement.ended, 'currentTime:', mediaElement.currentTime);
+            const playPromise = mediaElement.play();
+            if (playPromise) {
+                playPromise.then(() => {
+                    console.log('[EXPORT_V2] mediaElement.play()成功');
+                }).catch(err => {
+                    console.error('[EXPORT_V2] mediaElement.play()失败:', err);
+                });
+            }
+            console.log('[EXPORT_V2] mediaElement.play()调用完成');
+            seesound.isPlaying = true;
+            document.getElementById('playBtn').textContent = '⏸';
+
+            progressInterval = setInterval(() => {
+                if (!recordingActive) {
+                    console.log('[EXPORT_V2] progressInterval检测到recordingActive=false');
+                    return;
+                }
+                const elapsed = mediaElement.currentTime;
+                console.log('[EXPORT_V2] elapsed:', elapsed, 'duration:', duration);
+                const percent = Math.min(95, 10 + (elapsed / duration) * 85);
+                progressBar.style.width = percent + '%';
+                progressText.textContent = `录制中 (${formatTime(elapsed)}/${formatTime(duration)})...`;
+            }, 100);
+
+            requestAnimationFrame(recordingLoop);
+        };
+        
+        recorder.onstop = () => {
+            console.log('[EXPORT_V2] ====== recorder.onstop 触发 ======');
+            console.log('[EXPORT_V2] recorder.state:', recorder.state);
+            console.log('[EXPORT_V2] chunks数组最终长度:', chunks.length);
+        };
+        
+        recorder.onerror = (e) => {
+            console.error('[EXPORT_V2] recorder.onerror:', e);
         };
 
         const duration = mediaElement.duration;
+        console.log('[EXPORT_V2] 媒体时长:', duration);
         progressText.textContent = `录制中 (0/${formatTime(duration)})...`;
         progressBar.style.width = '10%';
 
         let progressInterval = null;
         let recordingActive = false;
+        console.log('[EXPORT_V2] ====== 开始录制前检查 ======');
+        console.log('[EXPORT_V2] seesound.animationId:', seesound.animationId);
 
         const originalAnimationId = seesound.animationId;
         if (originalAnimationId) {
+            console.log('[EXPORT_V2] 取消原始动画');
             cancelAnimationFrame(originalAnimationId);
         }
 
         function recordingLoop() {
-            if (!recordingActive) return;
+            if (!recordingActive) {
+                console.log('[EXPORT_V2] recordingLoop退出: recordingActive=false');
+                return;
+            }
 
-            // 使用 mediaElement 的 currentTime，而不是计时器
             const currentTime = mediaElement.currentTime;
             v2State.rotationAngle += 0.02 * v2State.rotationSpeed;
             
@@ -926,12 +1064,10 @@ async function exportVideoBrowserV2() {
             const w = seesound.videoCanvas.width;
             const h = seesound.videoCanvas.height;
             
-            // 更新音频数据
             if (seesound.analyser) {
                 seesound.analyser.getByteFrequencyData(seesound.dataArray);
             }
             
-            // 绘制画面
             drawBackground(ctx, w, h);
             drawLogo(ctx, 40, 40, v2State.logoSize, v2State.logoImage);
             
@@ -984,26 +1120,8 @@ async function exportVideoBrowserV2() {
             recordingAnimationId = requestAnimationFrame(recordingLoop);
         }
 
-        let recordingAnimationId = null;
-
-        recorder.onstart = () => {
-            recordingActive = true;
-            mediaElement.play();
-            seesound.isPlaying = true;
-            document.getElementById('playBtn').textContent = '⏸';
-
-            progressInterval = setInterval(() => {
-                if (!recordingActive) return;
-                const elapsed = mediaElement.currentTime;
-                const percent = Math.min(95, 10 + (elapsed / duration) * 85);
-                progressBar.style.width = percent + '%';
-                progressText.textContent = `录制中 (${formatTime(elapsed)}/${formatTime(duration)})...`;
-            }, 100);
-
-            requestAnimationFrame(recordingLoop);
-        };
-
         recorder.onstop = () => {
+            console.log('[EXPORT_V2] ====== recorder.onstop 触发 ======');
             clearInterval(progressInterval);
             recordingActive = false;
 
@@ -1018,9 +1136,12 @@ async function exportVideoBrowserV2() {
             progressText.textContent = '正在处理...';
             progressBar.style.width = '96%';
 
+            console.log('[EXPORT_V2] chunks数组:', chunks.length, '个');
             const blob = new Blob(chunks, { type: selectedMimeType || 'video/webm' });
+            console.log('[EXPORT_V2] 生成blob, 大小:', blob.size);
 
             if (blob.size === 0) {
+                console.error('[EXPORT_V2] 录制失败，文件为空!');
                 progressText.textContent = '录制失败，文件为空';
                 exportBtn.disabled = false;
                 return;
@@ -1050,16 +1171,61 @@ async function exportVideoBrowserV2() {
         };
 
         mediaElement.onended = () => {
+            console.log('[EXPORT_V2] ====== mediaElement.onended 触发 ======');
+            console.log('[EXPORT_V2] recordingActive:', recordingActive);
+            console.log('[EXPORT_V2] recorderStarted:', recorderStarted);
+            console.log('[EXPORT_V2] recorder.state:', recorder.state);
+            console.log('[EXPORT_V2] mediaElement.currentTime:', mediaElement.currentTime);
+            console.log('[EXPORT_V2] mediaElement.duration:', mediaElement.duration);
+            
+            if (!recorderStarted) {
+                console.log('[EXPORT_V2] 忽略onended: recorder还未真正开始');
+                return;
+            }
+            
             recordingActive = false;
             recorder.stop();
             seesound.isPlaying = false;
             document.getElementById('playBtn').textContent = '▶';
         };
 
+        console.log('[EXPORT_V2] ====== 开始录制 ======');
+        console.log('[EXPORT_V2] 调用recorder.start(100)');
         recorder.start(100);
+        console.log('[EXPORT_V2] recorder.start()已调用, recorder.state:', recorder.state);
+        
+        console.log('[EXPORT_V2] 使用setTimeout作为后备启动录制');
+        setTimeout(() => {
+            console.log('[EXPORT_V2] setTimeout回调 - recorder.state:', recorder.state);
+            if (recorder.state === 'recording' && !recorderStarted) {
+                console.log('[EXPORT_V2] 手动触发录制开始（后备）');
+                recorderStarted = true;
+                recordingActive = true;
+                console.log('[EXPORT_V2] recordingActive设为true');
+                
+                console.log('[EXPORT_V2] mediaElement.play()前 - paused:', mediaElement.paused, 'ended:', mediaElement.ended, 'currentTime:', mediaElement.currentTime);
+                mediaElement.play().then(() => {
+                    console.log('[EXPORT_V2] mediaElement.play()成功');
+                }).catch(err => {
+                    console.error('[EXPORT_V2] mediaElement.play()失败:', err);
+                });
+                seesound.isPlaying = true;
+                document.getElementById('playBtn').textContent = '⏸';
+
+                progressInterval = setInterval(() => {
+                    if (!recordingActive) return;
+                    const elapsed = mediaElement.currentTime;
+                    const percent = Math.min(95, 10 + (elapsed / duration) * 85);
+                    progressBar.style.width = percent + '%';
+                    progressText.textContent = `录制中 (${formatTime(elapsed)}/${formatTime(duration)})...`;
+                }, 100);
+
+                requestAnimationFrame(recordingLoop);
+            }
+        }, 200);
 
     } catch (error) {
-        console.error('录制失败:', error);
+        console.error('[EXPORT_V2] 录制失败:', error);
         progressText.textContent = '录制失败，使用传统导出...';
         await new Promise(r => setTimeout(r, 1000));
         await exportVideoServerV2();

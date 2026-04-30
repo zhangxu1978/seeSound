@@ -564,7 +564,11 @@ function animate(time = 0) {
 
 // 浏览器录制导出
 async function exportVideoBrowser() {
-    if (!seesound.currentFile) return;
+    console.log('[EXPORT] ====== 开始导出 ======');
+    if (!seesound.currentFile) {
+        console.error('[EXPORT] 没有加载文件!');
+        return;
+    }
 
     const progressEl = document.getElementById('exportProgress');
     const progressBar = document.getElementById('progressBarFill');
@@ -575,24 +579,39 @@ async function exportVideoBrowser() {
     exportBtn.disabled = true;
 
     if (!window.MediaRecorder) {
+        console.error('[EXPORT] 浏览器不支持MediaRecorder!');
         progressText.textContent = '浏览器不支持录制，使用传统导出';
         await exportVideoServer();
         return;
     }
+    console.log('[EXPORT] MediaRecorder可用');
 
     try {
         progressText.textContent = '准备录制...';
         progressBar.style.width = '5%';
 
         const mediaElement = seesound.isVideo ? seesound.videoElement : seesound.audioElement;
+        console.log('[EXPORT] mediaElement:', mediaElement.tagName, 'src:', mediaElement.src ? '有' : '无');
+        console.log('[EXPORT] seesound.isVideo:', seesound.isVideo);
+        console.log('[EXPORT] mediaElement.duration:', mediaElement.duration);
+        console.log('[EXPORT] mediaElement.readyState:', mediaElement.readyState);
+
         const wasPlaying = seesound.isPlaying;
+        console.log('[EXPORT] wasPlaying:', wasPlaying);
 
         mediaElement.pause();
         mediaElement.currentTime = 0;
         seesound.isPlaying = false;
         document.getElementById('playBtn').textContent = '▶';
 
-        if (!seesound.audioContext) initAudioContext();
+        console.log('[EXPORT] ====== 初始化音频上下文 ======');
+        if (!seesound.audioContext) {
+            console.log('[EXPORT] 创建新的audioContext');
+            initAudioContext();
+        }
+        console.log('[EXPORT] audioContext状态:', seesound.audioContext.state);
+        console.log('[EXPORT] seesound.source:', seesound.source ? '有' : '无');
+        console.log('[EXPORT] seesound.analyser:', seesound.analyser ? '有' : '无');
 
         const effectLayer = seesound.effectLayer;
         const subtitleLayer = seesound.subtitleLayer;
@@ -617,27 +636,60 @@ async function exportVideoBrowser() {
         const textLayerW = textLayerRect ? textLayerRect.width * scaleX : seesound.videoCanvas.width / 2;
         const textLayerH = textLayerRect ? textLayerRect.height * scaleY : seesound.videoCanvas.height / 2;
 
-        let audioStream;
+        let audioContext = seesound.audioContext;
+        let source = seesound.source;
+        let analyser = seesound.analyser;
+
+        let audioStream = null;
+        console.log('[EXPORT] ====== 创建音频流 ======');
         try {
-            const dest = seesound.audioContext.createMediaStreamDestination();
-            if (seesound.source) seesound.source.connect(dest);
-            seesound.analyser.connect(dest);
+            console.log('[EXPORT] 创建MediaStreamDestination');
+            const dest = audioContext.createMediaStreamDestination();
+            console.log('[EXPORT] dest.stream:', dest.stream ? '有音频轨道' : '无');
+            console.log('[EXPORT] dest.stream.getAudioTracks().length:', dest.stream.getAudioTracks().length);
+            
+            if (source) {
+                console.log('[EXPORT] 断开source当前连接');
+                try { source.disconnect(); } catch (e) { console.warn('[EXPORT] source.disconnect失败:', e); }
+                console.log('[EXPORT] 连接source -> analyser');
+                source.connect(analyser);
+            } else {
+                console.warn('[EXPORT] source为空，跳过连接');
+            }
+            
+            console.log('[EXPORT] 断开analyser当前连接');
+            try { analyser.disconnect(); } catch (e) { console.warn('[EXPORT] analyser.disconnect失败:', e); }
+            
+            console.log('[EXPORT] 连接analyser -> dest');
+            analyser.connect(dest);
+            console.log('[EXPORT] 连接analyser -> destination(扬声器)');
+            analyser.connect(audioContext.destination);
+            
             audioStream = dest.stream;
+            console.log('[EXPORT] audioStream创建成功, 音频轨道数:', audioStream.getAudioTracks().length);
         } catch (e) {
-            console.warn('音频录制可能有问题:', e);
+            console.error('[EXPORT] 音频流创建失败:', e);
+            console.warn('[EXPORT] 音频录制可能有问题:', e);
         }
 
+        console.log('[EXPORT] ====== 创建视频流 ======');
         const videoStream = seesound.videoCanvas.captureStream(30);
+        console.log('[EXPORT] videoStream视频轨道数:', videoStream.getVideoTracks().length);
 
         let combinedStream;
         if (audioStream) {
+            console.log('[EXPORT] 合并视频流和音频流');
             combinedStream = new MediaStream([
                 ...videoStream.getVideoTracks(),
                 ...audioStream.getAudioTracks()
             ]);
         } else {
+            console.warn('[EXPORT] audioStream为空，只使用视频流');
             combinedStream = videoStream;
         }
+        console.log('[EXPORT] combinedStream总轨道数:', combinedStream.getTracks().length);
+        console.log('[EXPORT] combinedStream视频轨道:', combinedStream.getVideoTracks().length);
+        console.log('[EXPORT] combinedStream音频轨道:', combinedStream.getAudioTracks().length);
 
         const mimeTypes = [
             'video/webm;codecs=vp9,opus',
@@ -645,35 +697,58 @@ async function exportVideoBrowser() {
             'video/webm'
         ];
         let selectedMimeType = '';
+        console.log('[EXPORT] ====== 选择MIME类型 ======');
         for (const type of mimeTypes) {
-            if (MediaRecorder.isTypeSupported(type)) {
+            const supported = MediaRecorder.isTypeSupported(type);
+            console.log('[EXPORT] 支持', type, ':', supported);
+            if (supported && !selectedMimeType) {
                 selectedMimeType = type;
-                break;
             }
         }
+        console.log('[EXPORT] 最终选择的MIME:', selectedMimeType || '无(使用默认)');
 
         const recorder = new MediaRecorder(combinedStream, {
-            mimeType: selectedMimeType,
+            mimeType: selectedMimeType || undefined,
             videoBitsPerSecond: 8 * 1024 * 1024
         });
+        console.log('[EXPORT] MediaRecorder创建完成, state:', recorder.state);
 
         const chunks = [];
+        console.log('[EXPORT] chunks数组初始长度:', chunks.length);
+        
         recorder.ondataavailable = (e) => {
+            console.log('[EXPORT] ondataavailable - 数据大小:', e.data.size);
             if (e.data.size > 0) {
                 chunks.push(e.data);
+                console.log('[EXPORT] chunks数组当前长度:', chunks.length);
             }
+        };
+        
+        recorder.onstart = () => {
+            console.log('[EXPORT] ====== 录制开始 ======');
+            console.log('[EXPORT] recorder.state:', recorder.state);
+        };
+        
+        recorder.onstop = () => {
+            console.log('[EXPORT] ====== 录制停止 ======');
+            console.log('[EXPORT] recorder.state:', recorder.state);
+            console.log('[EXPORT] chunks数组最终长度:', chunks.length);
         };
 
         const duration = mediaElement.duration;
+        console.log('[EXPORT] 媒体时长:', duration);
         progressText.textContent = `录制中 (0/${formatTime(duration)})...`;
         progressBar.style.width = '10%';
 
         let startTime = null;
         let progressInterval = null;
         let recordingActive = false;
+        console.log('[EXPORT] ====== 开始录制前检查 ======');
+        console.log('[EXPORT] seesound.animationId:', seesound.animationId);
 
         const originalAnimationId = seesound.animationId;
         if (originalAnimationId) {
+            console.log('[EXPORT] 取消原始动画');
             cancelAnimationFrame(originalAnimationId);
         }
 
@@ -765,7 +840,10 @@ async function exportVideoBrowser() {
         let recordingAnimationId = null;
 
         function recordingLoop() {
-            if (!recordingActive) return;
+            if (!recordingActive) {
+                console.log('[EXPORT] recordingLoop退出: recordingActive=false');
+                return;
+            }
 
             const currentTime = (Date.now() - startTime) * 0.001;
             drawVideoWithEffects(currentTime * 1000);
@@ -774,15 +852,23 @@ async function exportVideoBrowser() {
         }
 
         recorder.onstart = () => {
+            console.log('[EXPORT] ====== recorder.onstart 触发 ======');
             startTime = Date.now();
             recordingActive = true;
+            console.log('[EXPORT] recordingActive设为true');
+            
+            console.log('[EXPORT] 调用mediaElement.play()');
             mediaElement.play();
             seesound.isPlaying = true;
             document.getElementById('playBtn').textContent = '⏸';
 
             progressInterval = setInterval(() => {
-                if (!recordingActive) return;
+                if (!recordingActive) {
+                    console.log('[EXPORT] progressInterval检测到recordingActive=false');
+                    return;
+                }
                 const elapsed = (Date.now() - startTime) / 1000;
+                console.log('[EXPORT] elapsed:', elapsed, 'duration:', duration);
                 const percent = Math.min(95, 10 + (elapsed / duration) * 85);
                 progressBar.style.width = percent + '%';
                 progressText.textContent = `录制中 (${formatTime(elapsed)}/${formatTime(duration)})...`;
@@ -792,6 +878,7 @@ async function exportVideoBrowser() {
         };
 
         recorder.onstop = () => {
+            console.log('[EXPORT] ====== recorder.onstop 触发 ======');
             clearInterval(progressInterval);
             recordingActive = false;
 
@@ -806,9 +893,12 @@ async function exportVideoBrowser() {
             progressText.textContent = '正在处理...';
             progressBar.style.width = '96%';
 
+            console.log('[EXPORT] chunks数组:', chunks.length, '个');
             const blob = new Blob(chunks, { type: selectedMimeType || 'video/webm' });
+            console.log('[EXPORT] 生成blob, 大小:', blob.size);
 
             if (blob.size === 0) {
+                console.error('[EXPORT] 录制失败，文件为空!');
                 progressText.textContent = '录制失败，文件为空';
                 exportBtn.disabled = false;
                 return;
@@ -838,16 +928,22 @@ async function exportVideoBrowser() {
         };
 
         mediaElement.onended = () => {
+            console.log('[EXPORT] ====== mediaElement.onended 触发 ======');
+            console.log('[EXPORT] recordingActive:', recordingActive);
+            console.log('[EXPORT] recorder.state:', recorder.state);
             recordingActive = false;
             recorder.stop();
             seesound.isPlaying = false;
             document.getElementById('playBtn').textContent = '▶';
         };
 
+        console.log('[EXPORT] ====== 开始录制 ======');
+        console.log('[EXPORT] 调用recorder.start(100)');
         recorder.start(100);
+        console.log('[EXPORT] recorder.start()已调用, recorder.state:', recorder.state);
 
     } catch (error) {
-        console.error('录制失败:', error);
+        console.error('[EXPORT] 录制失败:', error);
         progressText.textContent = '录制失败，使用传统导出...';
         await new Promise(r => setTimeout(r, 1000));
         await exportVideoServer();
