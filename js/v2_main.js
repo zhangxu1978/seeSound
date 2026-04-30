@@ -412,14 +412,14 @@ function togglePlay() {
     seesound.isPlaying = !seesound.isPlaying;
 }
 
-// 进度条控制
+// 进度条控制 - 修复：正确处理点击事件
 function seekVideo(e) {
     const element = seesound.isVideo ? seesound.videoElement : seesound.audioElement;
-    if (!element.duration) return;
+    if (!element || !element.duration) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const percent = (e.clientX - rect.left) / rect.width;
-    element.currentTime = percent * element.duration;
+    element.currentTime = Math.min(percent * element.duration, element.duration);
 }
 
 // 连接音频源
@@ -818,7 +818,7 @@ async function exportVideoV2() {
     }
 }
 
-// 浏览器录制导出 V2
+// 浏览器录制导出 V2 - 修复版本
 async function exportVideoBrowserV2() {
     if (!seesound.currentFile) return;
 
@@ -907,7 +907,6 @@ async function exportVideoBrowserV2() {
         progressText.textContent = `录制中 (0/${formatTime(duration)})...`;
         progressBar.style.width = '10%';
 
-        let startTime = null;
         let progressInterval = null;
         let recordingActive = false;
 
@@ -919,7 +918,8 @@ async function exportVideoBrowserV2() {
         function recordingLoop() {
             if (!recordingActive) return;
 
-            const currentTime = (Date.now() - startTime) * 0.001;
+            // 使用 mediaElement 的 currentTime，而不是计时器
+            const currentTime = mediaElement.currentTime;
             v2State.rotationAngle += 0.02 * v2State.rotationSpeed;
             
             const ctx = seesound.videoCtx;
@@ -987,7 +987,6 @@ async function exportVideoBrowserV2() {
         let recordingAnimationId = null;
 
         recorder.onstart = () => {
-            startTime = Date.now();
             recordingActive = true;
             mediaElement.play();
             seesound.isPlaying = true;
@@ -995,7 +994,7 @@ async function exportVideoBrowserV2() {
 
             progressInterval = setInterval(() => {
                 if (!recordingActive) return;
-                const elapsed = (Date.now() - startTime) / 1000;
+                const elapsed = mediaElement.currentTime;
                 const percent = Math.min(95, 10 + (elapsed / duration) * 85);
                 progressBar.style.width = percent + '%';
                 progressText.textContent = `录制中 (${formatTime(elapsed)}/${formatTime(duration)})...`;
