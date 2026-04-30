@@ -23,6 +23,7 @@ const v2State = {
     lyricStrokeColor: '#000000',
     lyricStrokeWidth: 2,
     lyricOffsetY: 0,
+    lyricEffect: 'normal',
     
     // 文字内容
     dateGenre: '2024 | 流行',
@@ -163,6 +164,10 @@ function bindEvents() {
     document.getElementById('lyricOffsetY').addEventListener('input', (e) => {
         v2State.lyricOffsetY = parseInt(e.target.value);
         document.getElementById('lyricOffsetYValue').textContent = v2State.lyricOffsetY;
+    });
+    
+    document.getElementById('lyricEffect').addEventListener('change', (e) => {
+        v2State.lyricEffect = e.target.value;
     });
     
     // 歌词颜色选择
@@ -535,6 +540,178 @@ function drawVinylRecord(ctx, centerX, centerY, radius, rotationAngle, coverImag
     ctx.restore();
 }
 
+// 绘制歌词特效
+function drawLyricEffect(ctx, text, x, y, fontSize, effect, time) {
+    ctx.font = `${fontSize}px 杨任东竹石体-Regular, Microsoft YaHei`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    switch (effect) {
+        case 'neon':
+            ctx.shadowBlur = 20 + Math.sin(time * 3) * 10;
+            ctx.shadowColor = v2State.lyricColor;
+            ctx.fillStyle = v2State.lyricColor;
+            if (v2State.lyricStrokeWidth > 0) {
+                ctx.strokeStyle = v2State.lyricStrokeColor;
+                ctx.lineWidth = v2State.lyricStrokeWidth * 2;
+                ctx.lineJoin = 'round';
+                ctx.strokeText(text, x, y);
+            }
+            ctx.fillText(text, x, y);
+            ctx.shadowBlur = 0;
+            break;
+            
+        case 'gradient':
+            const gradient = ctx.createLinearGradient(x - 100, y, x + 100, y);
+            const hue1 = (time * 50) % 360;
+            const hue2 = (hue1 + 60) % 360;
+            const hue3 = (hue2 + 60) % 360;
+            gradient.addColorStop(0, `hsl(${hue1}, 80%, 60%)`);
+            gradient.addColorStop(0.5, `hsl(${hue2}, 80%, 70%)`);
+            gradient.addColorStop(1, `hsl(${hue3}, 80%, 60%)`);
+            ctx.fillStyle = gradient;
+            if (v2State.lyricStrokeWidth > 0) {
+                ctx.strokeStyle = v2State.lyricStrokeColor;
+                ctx.lineWidth = v2State.lyricStrokeWidth * 2;
+                ctx.lineJoin = 'round';
+                ctx.strokeText(text, x, y);
+            }
+            ctx.fillText(text, x, y);
+            break;
+            
+        case 'stroke':
+            ctx.strokeStyle = v2State.lyricStrokeColor;
+            ctx.lineWidth = v2State.lyricStrokeWidth * 2 + 2;
+            ctx.lineJoin = 'round';
+            ctx.strokeText(text, x, y);
+            ctx.fillStyle = v2State.lyricColor;
+            ctx.fillText(text, x, y);
+            break;
+            
+        case 'glow':
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = v2State.lyricColor;
+            ctx.fillStyle = v2State.lyricColor;
+            if (v2State.lyricStrokeWidth > 0) {
+                ctx.strokeStyle = v2State.lyricStrokeColor;
+                ctx.lineWidth = v2State.lyricStrokeWidth * 2;
+                ctx.lineJoin = 'round';
+                ctx.strokeText(text, x, y);
+            }
+            ctx.fillText(text, x, y);
+            ctx.shadowBlur = 0;
+            break;
+            
+        case 'wave':
+            const chars = text.split('');
+            let offsetX = -ctx.measureText(text).width / 2;
+            chars.forEach((char, i) => {
+                const charWidth = ctx.measureText(char).width;
+                const waveOffset = Math.sin(time * 4 + i * 0.5) * 5;
+                ctx.save();
+                ctx.translate(x + offsetX + charWidth / 2, y + waveOffset);
+                ctx.fillStyle = v2State.lyricColor;
+                if (v2State.lyricStrokeWidth > 0) {
+                    ctx.strokeStyle = v2State.lyricStrokeColor;
+                    ctx.lineWidth = v2State.lyricStrokeWidth * 2;
+                    ctx.lineJoin = 'round';
+                    ctx.strokeText(char, 0, 0);
+                }
+                ctx.fillText(char, 0, 0);
+                ctx.restore();
+                offsetX += charWidth;
+            });
+            break;
+            
+        case 'mirror':
+            ctx.save();
+            if (v2State.lyricStrokeWidth > 0) {
+                ctx.strokeStyle = v2State.lyricStrokeColor;
+                ctx.lineWidth = v2State.lyricStrokeWidth * 2;
+                ctx.lineJoin = 'round';
+                ctx.strokeText(text, x, y);
+            }
+            ctx.fillStyle = v2State.lyricColor;
+            ctx.fillText(text, x, y);
+            const mirrorAlpha = 0.25 + Math.sin(time * 2) * 0.1;
+            const shadowOffset = 8;
+            for (let i = 1; i <= 5; i++) {
+                ctx.globalAlpha = mirrorAlpha * (1 - i * 0.18);
+                ctx.fillStyle = v2State.lyricColor;
+                ctx.fillText(text, x, y + shadowOffset * i);
+            }
+            ctx.restore();
+            break;
+            
+        case 'aqua':
+            const aquaGradient = ctx.createLinearGradient(x, y - fontSize / 2, x, y + fontSize / 2);
+            aquaGradient.addColorStop(0, `rgba(78, 205, 196, ${0.9 + Math.sin(time * 2) * 0.1})`);
+            aquaGradient.addColorStop(0.5, `rgba(78, 205, 196, ${0.6 + Math.sin(time * 2) * 0.1})`);
+            aquaGradient.addColorStop(1, 'rgba(78, 205, 196, 0.3)');
+            ctx.fillStyle = aquaGradient;
+            if (v2State.lyricStrokeWidth > 0) {
+                ctx.strokeStyle = v2State.lyricStrokeColor;
+                ctx.lineWidth = v2State.lyricStrokeWidth * 2;
+                ctx.lineJoin = 'round';
+                ctx.strokeText(text, x, y);
+            }
+            ctx.fillText(text, x, y);
+            const shineX = x - 100 + ((time * 80) % 300);
+            const shineGradient = ctx.createLinearGradient(shineX - 50, y, shineX + 50, y);
+            shineGradient.addColorStop(0, 'transparent');
+            shineGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.4)');
+            shineGradient.addColorStop(1, 'transparent');
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(shineX - 50, y - fontSize, 100, fontSize * 2);
+            ctx.clip();
+            ctx.fillStyle = shineGradient;
+            ctx.fillText(text, x, y);
+            ctx.restore();
+            break;
+            
+        case 'liquid':
+            const liquidProgress = (Math.sin(time * 1.5) + 1) / 2;
+            const clipWidth = 400 * liquidProgress;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x + 200 - clipWidth, y - fontSize, clipWidth, fontSize * 2);
+            ctx.clip();
+            const liquidGradient = ctx.createLinearGradient(x - 100, y, x + 100, y);
+            liquidGradient.addColorStop(0, '#4ecdc4');
+            liquidGradient.addColorStop(0.5, '#a855f7');
+            liquidGradient.addColorStop(1, '#ff6b6b');
+            ctx.fillStyle = liquidGradient;
+            if (v2State.lyricStrokeWidth > 0) {
+                ctx.strokeStyle = v2State.lyricStrokeColor;
+                ctx.lineWidth = v2State.lyricStrokeWidth * 2;
+                ctx.lineJoin = 'round';
+                ctx.strokeText(text, x, y);
+            }
+            ctx.fillText(text, x, y);
+            ctx.restore();
+            ctx.globalAlpha = 0.7;
+            ctx.fillStyle = v2State.lyricColor;
+            if (v2State.lyricStrokeWidth > 0) {
+                ctx.strokeStyle = v2State.lyricStrokeColor;
+                ctx.lineWidth = v2State.lyricStrokeWidth * 2;
+                ctx.lineJoin = 'round';
+                ctx.strokeText(text, x, y);
+            }
+            ctx.fillText(text, x, y);
+            ctx.globalAlpha = 1;
+            break;
+            
+        default:
+            ctx.strokeStyle = v2State.lyricStrokeColor;
+            ctx.lineWidth = v2State.lyricStrokeWidth * 2;
+            ctx.lineJoin = 'round';
+            ctx.strokeText(text, x, y);
+            ctx.fillStyle = v2State.lyricColor;
+            ctx.fillText(text, x, y);
+    }
+}
+
 // 绘制滚动歌词
 function drawScrollingLyrics(ctx, lyrics, currentTime, x, y, width) {
     const adjustedY = y + v2State.lyricOffsetY;
@@ -548,9 +725,6 @@ function drawScrollingLyrics(ctx, lyrics, currentTime, x, y, width) {
     
     const currentLyric = findCurrentLyric(lyrics, currentTime);
     if (!currentLyric) return;
-    
-    ctx.font = `${v2State.lyricFontSize}px 杨任东竹石体-Regular, Microsoft YaHei`;
-    ctx.textAlign = 'center';
     
     let displayText = currentLyric.text;
     const textWidth = ctx.measureText(displayText).width;
@@ -568,30 +742,10 @@ function drawScrollingLyrics(ctx, lyrics, currentTime, x, y, width) {
         ctx.beginPath();
         ctx.rect(x - 10, adjustedY - v2State.lyricFontSize, width + 20, v2State.lyricFontSize * 1.5);
         ctx.clip();
-        
-        ctx.strokeStyle = v2State.lyricStrokeColor;
-        ctx.lineWidth = v2State.lyricStrokeWidth * 2;
-        ctx.lineJoin = 'round';
-        ctx.strokeText(displayText, x + offsetX, adjustedY);
-        
-        ctx.fillStyle = v2State.lyricColor;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = v2State.lyricColor;
-        ctx.fillText(displayText, x + offsetX, adjustedY);
-        ctx.shadowBlur = 0;
-        
+        drawLyricEffect(ctx, displayText, x + offsetX, adjustedY, v2State.lyricFontSize, v2State.lyricEffect, animationTime);
         ctx.restore();
     } else {
-        ctx.strokeStyle = v2State.lyricStrokeColor;
-        ctx.lineWidth = v2State.lyricStrokeWidth * 2;
-        ctx.lineJoin = 'round';
-        ctx.strokeText(displayText, x + width / 2, adjustedY);
-        
-        ctx.fillStyle = v2State.lyricColor;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = v2State.lyricColor;
-        ctx.fillText(displayText, x + width / 2, adjustedY);
-        ctx.shadowBlur = 0;
+        drawLyricEffect(ctx, displayText, x + width / 2, adjustedY, v2State.lyricFontSize, v2State.lyricEffect, animationTime);
     }
 }
 
@@ -826,7 +980,9 @@ function drawBackground(ctx, w, h) {
 }
 
 // 动画循环
+let animationTime = 0;
 function animate() {
+    animationTime += 0.016;
     seesound.animationId = requestAnimationFrame(animate);
     draw();
 }
