@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>声音可视化编辑器 - 黑胶唱片版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0d0d1a;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* 左侧预览区 */
+        .preview-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #08080f;
+            position: relative;
+        }
+
+        .preview-header {
+            padding: 12px 20px;
+            background: #121225;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #1e1e3a;
+        }
+
+        .preview-header h2 {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .preview-canvas-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #videoCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 播放控制栏 */
+        .playback-controls {
+            padding: 12px 20px;
+            background: #121225;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border-top: 1px solid #1e1e3a;
+        }
+
+        .control-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .control-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .time-display {
+            font-family: monospace;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            min-width: 90px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 2px;
+            width: 0%;
+        }
+
+        /* 右侧面板 */
+        .sidebar {
+            width: 400px;
+            background: #121225;
+            border-left: 1px solid #1e1e3a;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .panel-section {
+            padding: 16px;
+            border-bottom: 1px solid #1e1e3a;
+        }
+
+        .panel-section h3 {
+            font-size: 12px;
+            margin-bottom: 12px;
+            color: rgba(255, 255, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 设置行 */
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .setting-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .setting-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        select, input[type="number"], textarea {
+            background: #0d0d1a;
+            border: 1px solid #2a2a4a;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            min-width: 100px;
+        }
+
+        input[type="number"] {
+            width: 60px;
+        }
+
+        input[type="range"] {
+            width: 100px;
+            height: 4px;
+            -webkit-appearance: none;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 2px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #667eea;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .value-display {
+            font-size: 11px;
+            color: #667eea;
+            min-width: 35px;
+            text-align: right;
+        }
+
+        /* 分组标题 */
+        .group-title {
+            font-size: 11px;
+            color: #667eea;
+            margin: 12px 0 8px 0;
+            padding-top: 8px;
+            border-top: 1px solid #2a2a4a;
+        }
+
+        /* 导出按钮 */
+        .export-section {
+            padding: 16px;
+            margin-top: auto;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #333;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 8px;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* 导出进度 */
+        .export-progress {
+            display: none;
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+        }
+
+        .export-progress.active {
+            display: block;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .progress-bar-container {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        /* 文件上传 */
+        .file-upload {
+            border: 2px dashed rgba(102, 126, 234, 0.4);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-upload:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .file-upload input {
+            display: none;
+        }
+
+        .file-upload-text {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .file-info {
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            font-size: 11px;
+        }
+
+        /* 复选框 */
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .checkbox-label input {
+            width: 16px;
+            height: 16px;
+            accent-color: #667eea;
+        }
+
+        /* 颜色选择器 */
+        .color-picker {
+            display: flex;
+            gap: 6px;
+        }
+
+        .color-option {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .color-option:hover, .color-option.active {
+            border-color: #fff;
+            transform: scale(1.1);
+        }
+
+        .hidden-video {
+            display: none;
+        }
+
+        /* 可编辑文字样式 */
+        .editable-text {
+            cursor: text;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.3);
+            padding-bottom: 2px;
+            display: inline-block;
+            min-width: 100px;
+        }
+
+        .editable-text:hover {
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 左侧预览区 -->
+        <div class="preview-area">
+            <div class="preview-header">
+                <h2>🎬 黑胶唱片可视化</h2>
+                <span style="font-size: 11px; color: rgba(255,255,255,0.4);">拖拽调整位置，右下角调整大小</span>
+            </div>
+            
+            <div class="preview-canvas-container" id="previewContainer">
+                <canvas id="videoCanvas"></canvas>
+            </div>
+
+            <div class="playback-controls">
+                <button class="control-btn" id="playBtn">▶</button>
+                <span class="time-display" id="timeDisplay">00:00 / 00:00</span>
+                <div class="progress-bar" id="progressBar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧面板 -->
+        <div class="sidebar">
+            <!-- 文件上传 -->
+            <div class="panel-section">
+                <h3>📁 媒体文件</h3>
+                <div class="file-upload" id="fileUpload">
+                    <input type="file" id="mediaFile" accept="audio/*,video/*">
+                    <div class="file-upload-text">点击上传音频/视频文件</div>
+                </div>
+                <div class="file-info" id="fileInfo" style="display: none;">
+                    <div id="filename" style="color: #fff; margin-bottom: 4px;"></div>
+                    <div id="fileDetails" style="color: rgba(255,255,255,0.5);"></div>
+                </div>
+
+                <div class="group-title">歌词文件</div>
+                <div class="file-upload" id="lyricUpload">
+                    <input type="file" id="lyricFile" accept=".srt,.lrc">
+                    <div class="file-upload-text">点击上传歌词文件（.srt 或 .lrc）</div>
+                </div>
+                <div class="file-info" id="lyricFileInfo" style="display: none;">
+                    <div id="lyricFilename" style="color: #fff; margin-bottom: 4px;"></div>
+                </div>
+            </div>
+
+            <!-- 背景设置 -->
+            <div class="panel-section">
+                <h3>🖼️ 背景设置</h3>
+                <div class="file-upload" id="bgUpload">
+                    <input type="file" id="bgImageFile" accept="image/*">
+                    <div class="file-upload-text">点击上传背景图片</div>
+                </div>
+                <div class="file-info" id="bgFileInfo" style="display: none;">
+                    <div id="bgFilename" style="color: #fff; margin-bottom: 4px;"></div>
+                    <button class="btn-secondary" id="removeBgBtn" style="margin-top: 8px; font-size: 11px; padding: 4px 8px;">移除背景图</button>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">背景模糊度</span>
+                    <div class="setting-control">
+                        <input type="range" id="bgBlur" min="0" max="50" step="1" value="10">
+                        <span class="value-display" id="bgBlurValue">10</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">背景暗度</span>
+                    <div class="setting-control">
+                        <input type="range" id="bgDarkness" min="0" max="100" step="5" value="40">
+                        <span class="value-display" id="bgDarknessValue">40</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logo设置 -->
+            <div class="panel-section">
+                <h3>🏷️ Logo设置</h3>
+                <div class="file-upload" id="logoUpload">
+                    <input type="file" id="logoFile" accept="image/*">
+                    <div class="file-upload-text">点击上传Logo图片</div>
+                </div>
+                <div class="file-info" id="logoFileInfo" style="display: none;">
+                    <div id="logoFilename" style="color: #fff; margin-bottom: 4px;"></div>
+                    <button class="btn-secondary" id="removeLogoBtn" style="margin-top: 8px; font-size: 11px; padding: 4px 8px;">移除Logo</button>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">Logo大小</span>
+                    <div class="setting-control">
+                        <input type="range" id="logoSize" min="30" max="100" step="5" value="60">
+                        <span class="value-display" id="logoSizeValue">60</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 黑胶唱片设置 -->
+            <div class="panel-section">
+                <h3>💿 黑胶唱片</h3>
+                <div class="file-upload" id="coverUpload">
+                    <input type="file" id="coverFile" accept="image/*">
+                    <div class="file-upload-text">点击上传唱片封面</div>
+                </div>
+                <div class="file-info" id="coverFileInfo" style="display: none;">
+                    <div id="coverFilename" style="color: #fff; margin-bottom: 4px;"></div>
+                    <button class="btn-secondary" id="removeCoverBtn" style="margin-top: 8px; font-size: 11px; padding: 4px 8px;">移除封面</button>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">唱片大小</span>
+                    <div class="setting-control">
+                        <input type="range" id="vinylSize" min="100" max="250" step="10" value="180">
+                        <span class="value-display" id="vinylSizeValue">180</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">旋转速度</span>
+                    <div class="setting-control">
+                        <input type="range" id="rotationSpeed" min="0.1" max="3" step="0.1" value="1">
+                        <span class="value-display" id="rotationSpeedValue">1.0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 歌词设置 -->
+            <div class="panel-section">
+                <h3>📝 歌词设置</h3>
+                <div class="setting-row">
+                    <span class="setting-label">字体大小</span>
+                    <div class="setting-control">
+                        <input type="range" id="lyricFontSize" min="20" max="50" step="2" value="32">
+                        <span class="value-display" id="lyricFontSizeValue">32</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">歌词颜色</span>
+                    <div class="color-picker">
+                        <div class="color-option active" style="background: #ffffff" data-color="#ffffff"></div>
+                        <div class="color-option" style="background: #ffff00" data-color="#ffff00"></div>
+                        <div class="color-option" style="background: #00ff00" data-color="#00ff00"></div>
+                        <div class="color-option" style="background: #ff6b6b" data-color="#ff6b6b"></div>
+                        <div class="color-option" style="background: #ffd700" data-color="#ffd700"></div>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">描边颜色</span>
+                    <div class="color-picker">
+                        <div class="color-option active" style="background: #000000" data-stroke="#000000"></div>
+                        <div class="color-option" style="background: #ffffff" data-stroke="#ffffff"></div>
+                        <div class="color-option" style="background: #333333" data-stroke="#333333"></div>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">描边宽度</span>
+                    <div class="setting-control">
+                        <input type="range" id="lyricStrokeWidth" min="0" max="6" step="1" value="2">
+                        <span class="value-display" id="lyricStrokeWidthValue">2</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 文字内容设置 -->
+            <div class="panel-section">
+                <h3>📄 文字内容</h3>
+                
+                <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                    <span class="setting-label">日期/流派</span>
+                    <input type="text" id="textDateGenre" placeholder="[日期 | 流派]" value="2024 | 流行" style="width: 100%;">
+                </div>
+
+                <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                    <span class="setting-label">歌曲标题</span>
+                    <input type="text" id="textTitle" placeholder="[歌曲标题]" value="歌曲标题 - 可编辑" style="width: 100%;">
+                </div>
+
+                <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                    <span class="setting-label">歌手名</span>
+                    <input type="text" id="textArtist" placeholder="[歌手名]" value="歌手名 - 可编辑" style="width: 100%;">
+                </div>
+
+                <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                    <span class="setting-label">原唱</span>
+                    <input type="text" id="textOriginal" placeholder="[原唱占位]" value="原唱占位" style="width: 100%;">
+                </div>
+
+                <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                    <span class="setting-label">风格</span>
+                    <input type="text" id="textStyle" placeholder="[风格占位]" value="风格占位" style="width: 100%;">
+                </div>
+
+                <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                    <span class="setting-label">制作人</span>
+                    <input type="text" id="textProducer" placeholder="[制作人占位]" value="制作人占位" style="width: 100%;">
+                </div>
+            </div>
+
+            <!-- 波形设置 -->
+            <div class="panel-section">
+                <h3>🎵 波形设置</h3>
+                <div class="setting-row">
+                    <span class="setting-label">波形颜色</span>
+                    <div class="color-picker">
+                        <div class="color-option active" style="background: linear-gradient(135deg, #ff6b6b, #ffa500)" data-wavecolor="orange"></div>
+                        <div class="color-option" style="background: linear-gradient(135deg, #667eea, #764ba2)" data-wavecolor="purple"></div>
+                        <div class="color-option" style="background: linear-gradient(135deg, #4facfe, #00f2fe)" data-wavecolor="blue"></div>
+                        <div class="color-option" style="background: linear-gradient(135deg, #43e97b, #38f9d7)" data-wavecolor="green"></div>
+                        <div class="color-option" style="background: linear-gradient(135deg, #fa709a, #fee140)" data-wavecolor="pink"></div>
+                        <div class="color-option" style="background: linear-gradient(135deg, #ffffff, #e0e0e0)" data-wavecolor="white"></div>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">波形高度</span>
+                    <div class="setting-control">
+                        <input type="range" id="waveHeight" min="30" max="100" step="5" value="60">
+                        <span class="value-display" id="waveHeightValue">60</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <span class="setting-label">柱状数量</span>
+                    <div class="setting-control">
+                        <input type="range" id="waveBars" min="32" max="128" step="8" value="64">
+                        <span class="value-display" id="waveBarsValue">64</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 导出设置 -->
+            <div class="panel-section">
+                <h3>⚙️ 导出设置</h3>
+                <div class="setting-row">
+                    <span class="setting-label">导出模式</span>
+                    <select id="exportMode">
+                        <option value="browser">🚀 浏览器录制（快速）</option>
+                        <option value="server">⚙️ 传统导出（服务器）</option>
+                    </select>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">分辨率</span>
+                    <select id="resolution">
+                        <option value="original">原始分辨率</option>
+                        <option value="1080">1920x1080</option>
+                        <option value="720">1280x720</option>
+                        <option value="480">854x480</option>
+                    </select>
+                </div>
+                <div class="setting-row">
+                    <span class="setting-label">视频质量</span>
+                    <select id="quality">
+                        <option value="high">高</option>
+                        <option value="medium">中</option>
+                        <option value="low">低</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 导出按钮 -->
+            <div class="export-section">
+                <button class="btn-primary" id="exportBtn" disabled>
+                    🎬 导出视频
+                </button>
+                <div class="export-progress" id="exportProgress">
+                    <div class="progress-text" id="progressText">准备导出...</div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" id="progressBarFill"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <video id="videoElement" class="hidden-video" crossorigin="anonymous"></video>
+    <audio id="audioElement" class="hidden-video" crossorigin="anonymous"></audio>
+
+    <!-- 引入脚本 -->
+    <script src="js/state.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/subtitles.js"></script>
+    <script src="js/effects.js"></script>
+    <script src="js/export.js"></script>
+    <script src="js/v2_main.js"></script>
+</body>
+</html>
