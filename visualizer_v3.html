@@ -1,0 +1,1528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>声音可视化编辑器 - 液态卡片版</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --accent-coral: #ff6b6b;
+            --accent-cyan: #4ecdc4;
+            --accent-yellow: #ffe66d;
+            --accent-purple: #a855f7;
+            --glass-bg: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.12);
+        }
+
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            min-height: 100vh;
+            overflow: hidden;
+            background: #1a1a2e;
+        }
+
+        .app {
+            display: flex;
+            height: 100vh;
+        }
+
+        .bg-layer {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+        }
+
+        .bg-image {
+            position: absolute;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .bg-blur {
+            position: absolute;
+            inset: 0;
+            backdrop-filter: blur(var(--blur-radius, 20px));
+            -webkit-backdrop-filter: blur(var(--blur-radius, 20px));
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .cards-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            padding: 40px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .liquid-card {
+            width: 220px;
+            height: 320px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--blur-radius, 20px));
+            -webkit-backdrop-filter: blur(var(--blur-radius, 20px));
+            border-radius: 24px;
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            animation: liquidFloat 6s ease-in-out infinite;
+        }
+
+        .liquid-card:nth-child(1) { animation-delay: 0s; }
+        .liquid-card:nth-child(2) { animation-delay: -2s; }
+        .liquid-card:nth-child(3) { animation-delay: -4s; }
+
+        @keyframes liquidFloat {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-18px) rotate(2deg); }
+        }
+
+        .liquid-card:nth-child(1) { transform: rotate(-4deg); animation-name: float1; }
+        .liquid-card:nth-child(2) { transform: rotate(3deg); animation-name: float2; }
+        .liquid-card:nth-child(3) { transform: rotate(-2deg); animation-name: float3; }
+
+        @keyframes float1 {
+            0%, 100% { transform: translateY(0) rotate(-4deg); }
+            50% { transform: translateY(-18px) rotate(-2deg); }
+        }
+        @keyframes float2 {
+            0%, 100% { transform: translateY(0) rotate(3deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        @keyframes float3 {
+            0%, 100% { transform: translateY(0) rotate(-2deg); }
+            50% { transform: translateY(-16px) rotate(0deg); }
+        }
+
+        .liquid-card:hover {
+            animation-play-state: paused;
+            transform: translateY(-20px) rotate(0deg) scale(1.03);
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .liquid-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(30px);
+            opacity: 0.6;
+        }
+
+        .liquid-card:nth-child(1) .liquid-blob {
+            width: 120px; height: 120px;
+            background: linear-gradient(135deg, var(--accent-coral), var(--accent-yellow));
+            top: -30px; right: -30px;
+        }
+        .liquid-card:nth-child(2) .liquid-blob {
+            width: 100px; height: 100px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            bottom: -20px; left: -20px;
+        }
+        .liquid-card:nth-child(3) .liquid-blob {
+            width: 110px; height: 110px;
+            background: linear-gradient(135deg, var(--accent-yellow), var(--accent-coral));
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .card-content {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            padding: 24px;
+            background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card-title {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 14px;
+            color: rgba(255,255,255,0.6);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 16px;
+        }
+
+        .card-text {
+            font-size: 12px;
+            color: rgba(255,255,255,0.8);
+            line-height: 1.8;
+        }
+
+        .card-text .line {
+            margin-bottom: 8px;
+        }
+
+        .card-text .label {
+            color: rgba(255,255,255,0.4);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .card-text .value {
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .waveform-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        #waveformCanvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .lyric-display {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .lyric-line {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 18px;
+            color: rgba(255,255,255,0.9);
+            text-align: center;
+            padding: 8px 0;
+            transition: all 0.5s ease;
+            text-shadow: 0 0 10px currentColor;
+        }
+
+        .lyric-line.active {
+            color: var(--accent-cyan);
+            transform: scale(1.1);
+            text-shadow: 0 0 20px var(--accent-cyan);
+        }
+
+        .control-panel {
+            width: 340px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(255,255,255,0.1);
+            padding: 32px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            position: relative;
+            z-index: 20;
+            overflow-y: auto;
+        }
+
+        .panel-title {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .panel-subtitle {
+            font-size: 13px;
+            color: rgba(255,255,255,0.5);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .control-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: rgba(255,255,255,0.6);
+        }
+
+        .file-upload {
+            width: 100%;
+            height: 100px;
+            border: 2px dashed rgba(255,255,255,0.2);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: rgba(255,255,255,0.03);
+        }
+
+        .file-upload:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(78, 205, 196, 0.1);
+        }
+
+        .file-upload input { display: none; }
+
+        .file-upload-text {
+            font-size: 13px;
+            color: rgba(255,255,255,0.5);
+        }
+
+        .file-info {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            font-size: 11px;
+        }
+
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .slider-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            font-family: monospace;
+        }
+
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(78, 205, 196, 0.5);
+            transition: transform 0.2s;
+        }
+
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .input-field {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: #fff;
+            font-size: 13px;
+            width: 100%;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            background: rgba(78, 205, 196, 0.1);
+        }
+
+        .input-field::placeholder {
+            color: rgba(255,255,255,0.3);
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border: none;
+            color: white;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(78, 205, 196, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #333;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.15);
+            transform: translateY(-2px);
+        }
+
+        .export-progress {
+            display: none;
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
+
+        .export-progress.active { display: block; }
+
+        .progress-text {
+            font-size: 12px;
+            margin-bottom: 8px;
+            color: rgba(255,255,255,0.7);
+        }
+
+        .progress-bar-container {
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .playback-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+        }
+
+        .control-btn {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            border: none;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .control-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .time-display {
+            font-family: monospace;
+            font-size: 12px;
+            color: rgba(255,255,255,0.7);
+            min-width: 80px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+            border-radius: 2px;
+            width: 0%;
+        }
+
+        .color-picker {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .color-option {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .color-option:hover, .color-option.active {
+            border-color: #fff;
+            transform: scale(1.15);
+        }
+
+        select.input-field {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+
+        select.input-field option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        .text-effect-preview {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 20px;
+            font-weight: 700;
+            text-align: center;
+            padding: 16px;
+            margin-top: 8px;
+        }
+
+        .effect-neon {
+            color: #fff;
+            text-shadow:
+                0 0 5px var(--accent-coral),
+                0 0 10px var(--accent-coral),
+                0 0 20px var(--accent-coral);
+        }
+
+        .effect-gradient {
+            background: linear-gradient(90deg, var(--accent-coral), var(--accent-yellow), var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-size: 200% 100%;
+            animation: gradientMove 3s linear infinite;
+        }
+
+        @keyframes gradientMove {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+
+        .effect-glass {
+            background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,255,255,0.6));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            backdrop-filter: blur(2px);
+        }
+
+        .effect-aqua {
+            background: linear-gradient(180deg, rgba(78,205,196,0.9), rgba(78,205,196,0.4));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .effect-liquid {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple), var(--accent-coral));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: liquidShimmer 2s ease-in-out infinite;
+        }
+
+        @keyframes liquidShimmer {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.3); }
+        }
+
+        .effect-mirror {
+            background: linear-gradient(180deg, #fff 0%, var(--accent-purple) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .effect-wave span {
+            display: inline-block;
+            animation: waveAnim 1s ease-in-out infinite;
+        }
+
+        .effect-wave span:nth-child(1) { animation-delay: 0s; }
+        .effect-wave span:nth-child(2) { animation-delay: 0.15s; }
+        .effect-wave span:nth-child(3) { animation-delay: 0.3s; }
+
+        @keyframes waveAnim {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        @media (max-width: 900px) {
+            .app { flex-direction: column; }
+            .cards-container { flex-wrap: wrap; gap: 20px; padding: 20px; }
+            .liquid-card { width: 180px; height: 260px; }
+            .control-panel {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid rgba(255,255,255,0.1);
+                max-height: 50vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="bg-layer">
+            <div class="bg-image" id="bgImage"></div>
+            <div class="bg-blur" id="bgBlur"></div>
+        </div>
+
+        <div class="cards-container">
+            <div class="liquid-card" id="card1">
+                <div class="liquid-blob"></div>
+                <div class="card-content">
+                    <div class="card-title">曲目信息</div>
+                    <div class="card-text">
+                        <div class="line">
+                            <div class="label">作者</div>
+                            <div class="value" id="textAuthor">待设置</div>
+                        </div>
+                        <div class="line">
+                            <div class="label">歌名</div>
+                            <div class="value" id="textSongName">待设置</div>
+                        </div>
+                        <div class="line">
+                            <div class="label">风格</div>
+                            <div class="value" id="textStyle">待设置</div>
+                        </div>
+                        <div class="line">
+                            <div class="label">时间</div>
+                            <div class="value" id="textTime">00:00</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="liquid-card" id="card2">
+                <div class="liquid-blob"></div>
+                <div class="card-content">
+                    <div class="card-title">音频波形</div>
+                    <div class="waveform-container">
+                        <canvas id="waveformCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="liquid-card" id="card3">
+                <div class="liquid-blob"></div>
+                <div class="card-content">
+                    <div class="card-title">歌词</div>
+                    <div class="lyric-display" id="lyricDisplay">
+                        <div class="lyric-line" id="lyricLine1"></div>
+                        <div class="lyric-line active" id="lyricLine2">等待上传音频</div>
+                        <div class="lyric-line" id="lyricLine3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <div>
+                <h2 class="panel-title">液态卡片可视化</h2>
+                <p class="panel-subtitle">三张卡牌：信息 / 波形 / 歌词</p>
+            </div>
+
+            <div class="playback-controls">
+                <button class="control-btn" id="playBtn">▶</button>
+                <span class="time-display" id="timeDisplay">00:00 / 00:00</span>
+                <div class="progress-bar" id="progressBar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">上传媒体文件</label>
+                <div class="file-upload" id="mediaUpload">
+                    <input type="file" id="mediaFile" accept="audio/*,video/*">
+                    <span class="file-upload-text">📁 点击或拖拽上传音频/视频</span>
+                </div>
+                <div class="file-info" id="fileInfo" style="display: none;">
+                    <div id="filename" style="color: #fff;"></div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">歌词文件</label>
+                <div class="file-upload" id="lyricUpload">
+                    <input type="file" id="lyricFile" accept=".srt,.lrc,.txt">
+                    <span class="file-upload-text">📝 点击上传歌词文件</span>
+                </div>
+                <div class="file-info" id="lyricFileInfo" style="display: none;">
+                    <div id="lyricFilename" style="color: #fff;"></div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">背景设置</label>
+                <div class="file-upload" id="bgUpload">
+                    <input type="file" id="bgImageFile" accept="image/*">
+                    <span class="file-upload-text">🖼️ 点击上传背景图片</span>
+                </div>
+                <div class="slider-container" style="margin-top: 8px;">
+                    <div class="slider-header">
+                        <span class="control-label">模糊程度</span>
+                        <span class="slider-value" id="blurValue">20px</span>
+                    </div>
+                    <input type="range" class="slider" id="blurSlider" min="0" max="100" value="20">
+                </div>
+                <div class="slider-container">
+                    <div class="slider-header">
+                        <span class="control-label">遮罩透明度</span>
+                        <span class="slider-value" id="overlayValue">30%</span>
+                    </div>
+                    <input type="range" class="slider" id="overlaySlider" min="0" max="80" value="30">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">文字信息</label>
+                <input type="text" class="input-field" id="inputAuthor" placeholder="作者名称" value="">
+                <input type="text" class="input-field" id="inputSongName" placeholder="歌曲名称" value="">
+                <input type="text" class="input-field" id="inputStyle" placeholder="音乐风格" value="">
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">歌词特效</label>
+                <select class="input-field" id="lyricEffect">
+                    <option value="normal">普通</option>
+                    <option value="neon">霓虹光晕</option>
+                    <option value="gradient">渐变流动</option>
+                    <option value="glass">毛玻璃</option>
+                    <option value="aqua">水漾效果</option>
+                    <option value="liquid">流彩效果</option>
+                    <option value="mirror">幻影效果</option>
+                    <option value="wave">波浪效果</option>
+                </select>
+                <div class="text-effect-preview" id="effectPreview">
+                    <span class="effect-neon">预览特效</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">波形颜色</label>
+                <div class="color-picker">
+                    <div class="color-option active" style="background: linear-gradient(135deg, #ff6b6b, #ffa500)" data-wave="orange"></div>
+                    <div class="color-option" style="background: linear-gradient(135deg, #667eea, #764ba2)" data-wave="purple"></div>
+                    <div class="color-option" style="background: linear-gradient(135deg, #4ecdc4, #00f2fe)" data-wave="cyan"></div>
+                    <div class="color-option" style="background: linear-gradient(135deg, #43e97b, #38f9d7)" data-wave="green"></div>
+                    <div class="color-option" style="background: linear-gradient(135deg, #fa709a, #fee140)" data-wave="pink"></div>
+                    <div class="color-option" style="background: linear-gradient(135deg, #ffffff, #e0e0e0)" data-wave="white"></div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">导出设置</label>
+                <select class="input-field" id="exportMode">
+                    <option value="browser">🚀 浏览器录制（快速）</option>
+                    <option value="server">⚙️ 传统导出（服务器）</option>
+                </select>
+                <select class="input-field" id="resolution">
+                    <option value="1080">1920x1080</option>
+                    <option value="720">1280x720</option>
+                    <option value="480">854x480</option>
+                </select>
+            </div>
+
+            <button class="btn-primary" id="exportBtn" disabled>
+                🎬 导出视频
+            </button>
+            <div class="export-progress" id="exportProgress">
+                <div class="progress-text" id="progressText">准备导出...</div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill" id="progressBarFill"></div>
+                </div>
+            </div>
+
+            <button class="btn-secondary" id="resetBtn">
+                <span>↺</span> 恢复默认
+            </button>
+        </div>
+    </div>
+
+    <video id="videoElement" class="hidden-video" crossorigin="anonymous"></video>
+    <audio id="audioElement" class="hidden-video" crossorigin="anonymous"></audio>
+
+    <script>
+        const state = {
+            audioContext: null,
+            analyser: null,
+            source: null,
+            dataArray: null,
+            mediaFile: null,
+            lyrics: [],
+            currentLyricIndex: 0,
+            isPlaying: false,
+            waveColor: 'orange',
+            lyricEffect: 'normal'
+        };
+
+        const waveColorThemes = {
+            orange: { start: '#ff6b6b', end: '#ffa500' },
+            purple: { start: '#667eea', end: '#764ba2' },
+            cyan: { start: '#4ecdc4', end: '#00f2fe' },
+            green: { start: '#43e97b', end: '#38f9d7' },
+            pink: { start: '#fa709a', end: '#fee140' },
+            white: { start: '#ffffff', end: '#e0e0e0' }
+        };
+
+        const bgImage = document.getElementById('bgImage');
+        const bgBlur = document.getElementById('bgBlur');
+        const waveformCanvas = document.getElementById('waveformCanvas');
+        const waveformCtx = waveformCanvas.getContext('2d');
+        const audioElement = document.getElementById('audioElement');
+        const videoElement = document.getElementById('videoElement');
+        const playBtn = document.getElementById('playBtn');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const exportBtn = document.getElementById('exportBtn');
+        const exportProgress = document.getElementById('exportProgress');
+        const progressText = document.getElementById('progressText');
+        const progressBarFill = document.getElementById('progressBarFill');
+
+        function initAudioContext() {
+            if (!state.audioContext) {
+                state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                state.analyser = state.audioContext.createAnalyser();
+                state.analyser.fftSize = 256;
+                state.analyser.smoothingTimeConstant = 0.8;
+                state.bufferLength = state.analyser.frequencyBinCount;
+                state.dataArray = new Uint8Array(state.bufferLength);
+            }
+        }
+
+        function connectAudioSource(element) {
+            if (state.connectedElement === element) {
+                return;
+            }
+            if (state.source) {
+                try { state.source.disconnect(); } catch (e) {}
+            }
+            initAudioContext();
+            try {
+                state.source = state.audioContext.createMediaElementSource(element);
+                state.source.connect(state.analyser);
+                state.analyser.connect(state.audioContext.destination);
+                state.connectedElement = element;
+            } catch (e) {
+                console.error('音频连接失败:', e);
+            }
+        }
+
+        function resizeWaveformCanvas() {
+            const container = waveformCanvas.parentElement;
+            waveformCanvas.width = container.clientWidth;
+            waveformCanvas.height = container.clientHeight;
+        }
+
+        function drawWaveform() {
+            if (!state.analyser || !state.dataArray) {
+                requestAnimationFrame(drawWaveform);
+                return;
+            }
+
+            state.analyser.getByteFrequencyData(state.dataArray);
+
+            const width = waveformCanvas.width;
+            const height = waveformCanvas.height;
+            const theme = waveColorThemes[state.waveColor];
+
+            waveformCtx.clearRect(0, 0, width, height);
+
+            const barCount = 32;
+            const barWidth = width / barCount - 2;
+            const step = Math.floor(state.bufferLength / barCount);
+            const centerX = width / 2;
+            const halfBars = barCount / 2;
+
+            for (let i = 0; i < halfBars; i++) {
+                const value = state.dataArray[i * step];
+                const barHeight = (value / 255) * height * 0.8;
+                const barSpacing = barWidth + 2;
+
+                const gradient = waveformCtx.createLinearGradient(0, (height - barHeight) / 2, 0, (height + barHeight) / 2);
+                gradient.addColorStop(0, theme.start);
+                gradient.addColorStop(1, theme.end);
+                waveformCtx.fillStyle = gradient;
+                waveformCtx.globalAlpha = 0.8;
+
+                const leftX = centerX - (i + 1) * barSpacing;
+                const rightX = centerX + i * barSpacing;
+
+                waveformCtx.beginPath();
+                waveformCtx.roundRect(leftX, (height - barHeight) / 2, barWidth, barHeight, 4);
+                waveformCtx.fill();
+
+                waveformCtx.beginPath();
+                waveformCtx.roundRect(rightX, (height - barHeight) / 2, barWidth, barHeight, 4);
+                waveformCtx.fill();
+            }
+
+            requestAnimationFrame(drawWaveform);
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function updateTimeDisplay() {
+            const media = state.currentMediaElement || audioElement;
+            const current = media.currentTime;
+            const duration = media.duration || 0;
+            timeDisplay.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
+            progressFill.style.width = duration ? (current / duration * 100) + '%' : '0%';
+            document.getElementById('textTime').textContent = formatTime(current);
+            updateLyrics();
+        }
+
+        function updateLyrics() {
+            const media = state.currentMediaElement || audioElement;
+            const currentTime = media.currentTime;
+            console.log('[歌词] updateLyrics called, currentTime:', currentTime, 'lyrics count:', state.lyrics.length);
+
+            if (!state.lyrics.length) {
+                console.log('[歌词] 没有歌词数据');
+                return;
+            }
+
+            let currentIndex = 0;
+
+            for (let i = 0; i < state.lyrics.length; i++) {
+                if (state.lyrics[i].time <= currentTime) {
+                    currentIndex = i;
+                } else {
+                    break;
+                }
+            }
+
+            console.log('[歌词] currentIndex:', currentIndex, 'currentLyricIndex:', state.currentLyricIndex);
+
+            if (currentIndex !== state.currentLyricIndex) {
+                state.currentLyricIndex = currentIndex;
+                updateLyricDisplay();
+            }
+        }
+
+        function updateLyricDisplay() {
+            console.log('[歌词] updateLyricDisplay called');
+            const lines = [
+                document.getElementById('lyricLine1'),
+                document.getElementById('lyricLine2'),
+                document.getElementById('lyricLine3')
+            ];
+
+            const idx = state.currentLyricIndex;
+            const lyrics = state.lyrics;
+            console.log('[歌词] idx:', idx, 'lyrics:', lyrics);
+
+            lines[0].textContent = idx > 0 ? lyrics[idx - 1]?.text || '' : '';
+            lines[1].textContent = lyrics[idx]?.text || '等待上传音频';
+            lines[2].textContent = lyrics[idx + 1]?.text || '';
+
+            console.log('[歌词] 设置歌词:', lines[0].textContent, '|', lines[1].textContent, '|', lines[2].textContent);
+
+            applyLyricEffect(lines[1]);
+        }
+
+        function applyLyricEffect(element) {
+            element.className = 'lyric-line active';
+            const text = element.textContent;
+
+            switch (state.lyricEffect) {
+                case 'neon':
+                    element.innerHTML = `<span class="effect-neon">${text}</span>`;
+                    break;
+                case 'gradient':
+                    element.innerHTML = `<span class="effect-gradient">${text}</span>`;
+                    break;
+                case 'glass':
+                    element.innerHTML = `<span class="effect-glass">${text}</span>`;
+                    break;
+                case 'aqua':
+                    element.innerHTML = `<span class="effect-aqua">${text}</span>`;
+                    break;
+                case 'liquid':
+                    element.innerHTML = `<span class="effect-liquid">${text}</span>`;
+                    break;
+                case 'mirror':
+                    element.innerHTML = `<span class="effect-mirror">${text}</span>`;
+                    break;
+                case 'wave':
+                    const chars = text.split('');
+                    const waveChars = chars.map((c, i) => `<span style="animation-delay: ${i * 0.1}s">${c}</span>`).join('');
+                    element.innerHTML = `<span class="effect-wave">${waveChars}</span>`;
+                    break;
+                default:
+                    element.textContent = text;
+            }
+        }
+
+        function parseLyrics(content) {
+            console.log('[歌词] parseLyrics 被调用, content类型:', typeof content, 'content:', content);
+            if (!content) {
+                console.log('[歌词] content为空, 返回');
+                return;
+            }
+            console.log('[歌词] 开始解析歌词内容, 长度:', content.length);
+            const lines = content.split('\n');
+            state.lyrics = [];
+
+            const srtPattern = /(\d+)\s*\n(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})\s*\n([\s\S]*?)(?=\n\n\d+\s*\n|$)/g;
+            let match;
+            while ((match = srtPattern.exec(content)) !== null) {
+                const timeStr = match[2];
+                const text = match[4].trim().replace(/<[^>]*>/g, '');
+                const parts = timeStr.split(':');
+                const secsParts = parts[2].split(',');
+                const hours = parseInt(parts[0]);
+                const mins = parseInt(parts[1]);
+                const secs = parseInt(secsParts[0]);
+                const ms = parseInt(secsParts[1]);
+                const time = hours * 3600 + mins * 60 + secs + ms / 1000;
+                if (text) {
+                    state.lyrics.push({ time, text });
+                    console.log('[歌词] SRT匹配:', timeStr, '->', time, 'text:', text);
+                }
+            }
+
+            if (state.lyrics.length > 0) {
+                state.lyrics.sort((a, b) => a.time - b.time);
+                console.log('[歌词] SRT格式解析完成, 共', state.lyrics.length, '行歌词');
+                return;
+            }
+
+            for (const line of lines) {
+                let time = null;
+                let text = line;
+
+                const timeMatchWithMs = line.match(/\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/);
+                if (timeMatchWithMs) {
+                    const mins = parseInt(timeMatchWithMs[1]);
+                    const secs = parseInt(timeMatchWithMs[2]);
+                    const ms = timeMatchWithMs[3].length === 3 ? parseInt(timeMatchWithMs[3]) : parseInt(timeMatchWithMs[3]) * 10;
+                    time = mins * 60 + secs + ms / 1000;
+                    text = timeMatchWithMs[4].trim();
+                    console.log('[歌词] LRC匹配带毫秒:', line, '-> time:', time, 'text:', text);
+                } else {
+                    const timeMatch = line.match(/\[(\d{2}):(\d{2})\](.*)/);
+                    if (timeMatch) {
+                        const mins = parseInt(timeMatch[1]);
+                        const secs = parseInt(timeMatch[2]);
+                        time = mins * 60 + secs;
+                        text = timeMatch[3].trim();
+                        console.log('[歌词] LRC匹配标准:', line, '-> time:', time, 'text:', text);
+                    }
+                }
+
+                if (time !== null && text) {
+                    state.lyrics.push({ time, text });
+                }
+            }
+
+            state.lyrics.sort((a, b) => a.time - b.time);
+            console.log('[歌词] 解析完成, 共', state.lyrics.length, '行歌词:', state.lyrics);
+        }
+
+        function handleMediaFile(file) {
+            if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) return;
+
+            const url = URL.createObjectURL(file);
+            state.mediaFile = file;
+            state.currentMediaElement = file.type.startsWith('audio/') ? audioElement : videoElement;
+
+            if (file.type.startsWith('audio/')) {
+                audioElement.src = url;
+                videoElement.src = '';
+            } else {
+                videoElement.src = url;
+                audioElement.src = '';
+            }
+
+            document.getElementById('filename').textContent = file.name;
+            document.getElementById('fileInfo').style.display = 'block';
+
+            audioElement.onloadedmetadata = () => {
+                timeDisplay.textContent = `00:00 / ${formatTime(audioElement.duration)}`;
+                exportBtn.disabled = false;
+            };
+
+            audioElement.ontimeupdate = updateTimeDisplay;
+            videoElement.ontimeupdate = updateTimeDisplay;
+            connectAudioSource(state.currentMediaElement);
+            drawWaveform();
+        }
+
+        function startExport() {
+            if (!state.mediaFile) return;
+
+            exportProgress.classList.add('active');
+            exportBtn.disabled = true;
+            progressText.textContent = '正在录制...';
+            progressBarFill.style.width = '0%';
+
+            const resolution = document.getElementById('resolution').value;
+            const widths = { '1080': 1920, '720': 1280, '480': 854 };
+            const heights = { '1080': 1080, '720': 720, '480': 480 };
+            const width = widths[resolution] || 1920;
+            const height = heights[resolution] || 1080;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+
+            const media = state.currentMediaElement || audioElement;
+            console.log('[导出] media:', media);
+            console.log('[导出] media.duration:', media.duration);
+            console.log('[导出] media.readyState:', media.readyState);
+            console.log('[导出] media.src:', media.src);
+            if (!media.duration || isNaN(media.duration)) {
+                console.log('[导出] duration 无效，等待加载...');
+                exportProgress.classList.remove('active');
+                exportBtn.disabled = false;
+                progressText.textContent = '请等待媒体加载完成';
+                return;
+            }
+            const duration = media.duration;
+            const startTime = Date.now();
+            console.log('[导出] duration:', duration);
+
+            const dest = state.audioContext.createMediaStreamDestination();
+            console.log('[导出] dest:', dest);
+            console.log('[导出] state.analyser:', state.analyser);
+            console.log('[导出] state.source:', state.source);
+
+            state.analyser.disconnect();
+            console.log('[导出] analyser disconnected');
+            state.source.connect(state.analyser);
+            state.analyser.connect(dest);
+            state.analyser.connect(state.audioContext.destination);
+
+            const videoStream = canvas.captureStream(30);
+            console.log('[导出] videoStream.getVideoTracks():', videoStream.getVideoTracks());
+            const combinedStream = new MediaStream([
+                ...videoStream.getVideoTracks(),
+                ...dest.stream.getAudioTracks()
+            ]);
+            console.log('[导出] combinedStream tracks:', combinedStream.getTracks());
+
+            const mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+            console.log('[导出] MediaRecorder created, mimeType:', mediaRecorder.mimeType);
+            const chunks = [];
+
+            mediaRecorder.ondataavailable = (e) => {
+                console.log('[导出] ondataavailable, size:', e.data.size);
+                chunks.push(e.data);
+            };
+            mediaRecorder.onerror = (e) => {
+                console.error('[导出] MediaRecorder error:', e);
+            };
+            mediaRecorder.onstop = () => {
+                console.log('[导出] onstop called, chunks:', chunks.length);
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `visualizer_v3_${Date.now()}.webm`;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                exportProgress.classList.remove('active');
+                exportBtn.disabled = false;
+                progressText.textContent = '导出完成！';
+
+                state.analyser.disconnect();
+                state.source.connect(state.analyser);
+                state.analyser.connect(state.audioContext.destination);
+            };
+
+            let recordingActive = true;
+            let progressInterval = null;
+
+            function render() {
+                if (!recordingActive) {
+                    console.log('[导出] render skipped - recordingActive is false');
+                    return;
+                }
+
+                const elapsed = (Date.now() - startTime) / 1000;
+                console.log('[导出] render called, elapsed:', elapsed, 'duration:', duration);
+
+                if (elapsed < duration) {
+                    ctx.fillStyle = '#1a1a2e';
+                    ctx.fillRect(0, 0, width, height);
+
+                    renderCards(ctx, width, height, elapsed);
+
+                    const percent = Math.min(95, 10 + (elapsed / duration) * 85);
+                    progressBarFill.style.width = percent + '%';
+                    progressText.textContent = `录制中... ${Math.round(percent)}%`;
+
+                    requestAnimationFrame(render);
+                } else {
+                    recordingActive = false;
+                    clearInterval(progressInterval);
+                    media.pause();
+                    mediaRecorder.stop();
+                }
+            }
+
+            mediaRecorder.onstart = () => {
+                console.log('[导出] mediaRecorder.onstart fired');
+            };
+
+            console.log('[导出] calling mediaRecorder.start()');
+            console.log('[导出] mediaRecorder.state before start:', mediaRecorder.state);
+            mediaRecorder.start();
+            console.log('[导出] mediaRecorder.start() called, state:', mediaRecorder.state);
+
+            media.play();
+            progressInterval = setInterval(() => {
+                const elapsed = (Date.now() - startTime) / 1000;
+                const percent = Math.min(95, 10 + (elapsed / duration) * 85);
+                progressBarFill.style.width = percent + '%';
+                progressText.textContent = `录制中... ${Math.round(percent)}%`;
+            }, 100);
+            requestAnimationFrame(render);
+        }
+
+        function renderCards(ctx, width, height, time) {
+            const cardWidth = 220;
+            const cardHeight = 320;
+            const gap = 40;
+            const totalWidth = cardWidth * 3 + gap * 2;
+            const startX = (width - totalWidth) / 2;
+            const startY = (height - cardHeight) / 2;
+
+            const cardPositions = [
+                { x: startX, y: startY, rotation: -0.07, delay: 0 },
+                { x: startX + cardWidth + gap, y: startY, rotation: 0.05, delay: -2 },
+                { x: startX + (cardWidth + gap) * 2, y: startY, rotation: -0.035, delay: -4 }
+            ];
+
+            cardPositions.forEach((pos, i) => {
+                const floatY = Math.sin((time + pos.delay) * 1) * 18;
+                const floatRotation = Math.sin((time + pos.delay) * 1) * 0.02;
+
+                ctx.save();
+                ctx.translate(pos.x + cardWidth / 2, pos.y + cardHeight / 2 + floatY);
+                ctx.rotate(pos.rotation + floatRotation);
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+                ctx.beginPath();
+                ctx.roundRect(-cardWidth / 2, -cardHeight / 2, cardWidth, cardHeight, 24);
+                ctx.fill();
+
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                if (i === 0) renderTextCard(ctx, cardWidth, cardHeight);
+                if (i === 1) renderWaveformCard(ctx, cardWidth, cardHeight);
+                if (i === 2) renderLyricCard(ctx, cardWidth, cardHeight);
+
+                ctx.restore();
+            });
+        }
+
+        function renderTextCard(ctx, width, height) {
+            const labelColor = 'rgba(255, 255, 255, 0.6)';
+            const valueColor = '#fff';
+            const labelFont = '10px Noto Sans SC';
+            const valueFont = '14px Noto Sans SC';
+
+            ctx.textAlign = 'left';
+
+            const startX = -width / 2 + 24;
+            let startY = -height / 2 + 40;
+            const lineHeight = 28;
+
+            ctx.fillStyle = labelColor;
+            ctx.font = labelFont;
+            ctx.fillText('作者', startX, startY);
+            startY += 12;
+            ctx.fillStyle = valueColor;
+            ctx.font = valueFont;
+            ctx.fillText(document.getElementById('inputAuthor').value || '待设置', startX, startY);
+            startY += lineHeight;
+
+            ctx.fillStyle = labelColor;
+            ctx.font = labelFont;
+            ctx.fillText('歌名', startX, startY);
+            startY += 12;
+            ctx.fillStyle = valueColor;
+            ctx.font = valueFont;
+            ctx.fillText(document.getElementById('inputSongName').value || '待设置', startX, startY);
+            startY += lineHeight;
+
+            ctx.fillStyle = labelColor;
+            ctx.font = labelFont;
+            ctx.fillText('风格', startX, startY);
+            startY += 12;
+            ctx.fillStyle = valueColor;
+            ctx.font = valueFont;
+            ctx.fillText(document.getElementById('inputStyle').value || '待设置', startX, startY);
+            startY += lineHeight;
+
+            ctx.fillStyle = labelColor;
+            ctx.font = labelFont;
+            ctx.fillText('时间', startX, startY);
+            startY += 12;
+            ctx.fillStyle = valueColor;
+            ctx.font = valueFont;
+            ctx.fillText(document.getElementById('textTime').textContent || '00:00', startX, startY);
+        }
+
+        function renderWaveformCard(ctx, width, height) {
+            if (!state.analyser || !state.dataArray) return;
+
+            state.analyser.getByteFrequencyData(state.dataArray);
+
+            const barCount = 32;
+            const barWidth = width / barCount - 4;
+            const step = Math.floor(state.bufferLength / barCount);
+            const theme = waveColorThemes[state.waveColor];
+            const centerX = 0;
+            const halfBars = barCount / 2;
+            const barSpacing = barWidth + 4;
+
+            for (let i = 0; i < halfBars; i++) {
+                const value = state.dataArray[i * step];
+                const barHeight = (value / 255) * height * 0.6;
+
+                const gradient = ctx.createLinearGradient(0, -barHeight / 2, 0, barHeight / 2);
+                gradient.addColorStop(0, theme.start);
+                gradient.addColorStop(1, theme.end);
+
+                ctx.fillStyle = gradient;
+                ctx.globalAlpha = 0.8;
+
+                const leftX = centerX - (i + 1) * barSpacing;
+                const rightX = centerX + i * barSpacing;
+
+                ctx.beginPath();
+                ctx.roundRect(leftX, -barHeight / 2, barWidth, barHeight, 4);
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.roundRect(rightX, -barHeight / 2, barWidth, barHeight, 4);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function renderLyricCard(ctx, width, height) {
+            const lines = [
+                document.getElementById('lyricLine1').textContent,
+                document.getElementById('lyricLine2').textContent,
+                document.getElementById('lyricLine3').textContent
+            ];
+
+            ctx.textAlign = 'center';
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.font = '16px Noto Serif SC';
+            ctx.fillText(lines[0], 0, -30);
+
+            ctx.fillStyle = '#4ecdc4';
+            ctx.font = '20px Noto Serif SC';
+            ctx.shadowColor = '#4ecdc4';
+            ctx.shadowBlur = 20;
+            ctx.fillText(lines[1], 0, 0);
+            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.font = '16px Noto Serif SC';
+            ctx.fillText(lines[2], 0, 30);
+        }
+
+        window.addEventListener('resize', resizeWaveformCanvas);
+        resizeWaveformCanvas();
+
+        document.getElementById('mediaFile').addEventListener('change', (e) => {
+            if (e.target.files[0]) handleMediaFile(e.target.files[0]);
+        });
+        document.getElementById('mediaUpload').addEventListener('click', () => document.getElementById('mediaFile').click());
+
+        document.getElementById('lyricFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                console.log('[歌词] 开始读取歌词文件:', file.name);
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    console.log('[歌词] 文件读取完成, 内容:', e.target.result.substring(0, 200));
+                    parseLyrics(e.target.result);
+                    document.getElementById('lyricFilename').textContent = file.name;
+                    document.getElementById('lyricFileInfo').style.display = 'block';
+                    console.log('[歌词] 调用 updateLyricDisplay, state.lyrics:', state.lyrics);
+                    updateLyricDisplay();
+                };
+                reader.readAsText(file);
+            }
+        });
+        document.getElementById('lyricUpload').addEventListener('click', () => document.getElementById('lyricFile').click());
+
+        document.getElementById('bgImageFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    bgImage.style.backgroundImage = `url(${e.target.result})`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        document.getElementById('bgUpload').addEventListener('click', () => document.getElementById('bgImageFile').click());
+
+        document.getElementById('blurSlider').addEventListener('input', (e) => {
+            const value = e.target.value;
+            document.documentElement.style.setProperty('--blur-radius', `${value}px`);
+            document.getElementById('blurValue').textContent = `${value}px`;
+        });
+
+        document.getElementById('overlaySlider').addEventListener('input', (e) => {
+            const value = e.target.value;
+            bgBlur.style.background = `rgba(0, 0, 0, ${value / 100})`;
+            document.getElementById('overlayValue').textContent = `${value}%`;
+        });
+
+        document.getElementById('inputAuthor').addEventListener('input', (e) => {
+            document.getElementById('textAuthor').textContent = e.target.value || '待设置';
+        });
+        document.getElementById('inputSongName').addEventListener('input', (e) => {
+            document.getElementById('textSongName').textContent = e.target.value || '待设置';
+        });
+        document.getElementById('inputStyle').addEventListener('input', (e) => {
+            document.getElementById('textStyle').textContent = e.target.value || '待设置';
+        });
+
+        document.querySelectorAll('.color-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+                document.querySelectorAll('.color-option').forEach(o => o.classList.remove('active'));
+                opt.classList.add('active');
+                state.waveColor = opt.dataset.wave;
+            });
+        });
+
+        document.getElementById('lyricEffect').addEventListener('change', (e) => {
+            state.lyricEffect = e.target.value;
+            updateLyricDisplay();
+
+            const preview = document.getElementById('effectPreview');
+            const effects = {
+                normal: '<span style="color:#fff">预览特效</span>',
+                neon: '<span class="effect-neon">预览特效</span>',
+                gradient: '<span class="effect-gradient">预览特效</span>',
+                glass: '<span class="effect-glass">预览特效</span>',
+                aqua: '<span class="effect-aqua">预览特效</span>',
+                liquid: '<span class="effect-liquid">预览特效</span>',
+                mirror: '<span class="effect-mirror">预览特效</span>',
+                wave: '<span class="effect-wave"><span>预</span><span>览</span><span>特</span><span>效</span></span>'
+            };
+            preview.innerHTML = effects[state.lyricEffect] || effects.normal;
+        });
+
+        playBtn.addEventListener('click', () => {
+            const media = state.currentMediaElement || audioElement;
+            if (!media.src) return;
+
+            if (state.isPlaying) {
+                media.pause();
+                playBtn.textContent = '▶';
+            } else {
+                media.play();
+                playBtn.textContent = '⏸';
+            }
+            state.isPlaying = !state.isPlaying;
+        });
+
+        progressBar.addEventListener('click', (e) => {
+            const media = state.currentMediaElement || audioElement;
+            if (!media.duration) return;
+            const rect = progressBar.getBoundingClientRect();
+            const percent = (e.clientX - rect.left) / rect.width;
+            media.currentTime = percent * media.duration;
+        });
+
+        exportBtn.addEventListener('click', startExport);
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            bgImage.style.backgroundImage = '';
+            document.getElementById('blurSlider').value = 20;
+            document.getElementById('overlaySlider').value = 30;
+            document.documentElement.style.setProperty('--blur-radius', '20px');
+            bgBlur.style.background = 'rgba(0, 0, 0, 0.3)';
+            document.getElementById('blurValue').textContent = '20px';
+            document.getElementById('overlayValue').textContent = '30%';
+
+            document.getElementById('inputAuthor').value = '';
+            document.getElementById('inputSongName').value = '';
+            document.getElementById('inputStyle').value = '';
+            document.getElementById('textAuthor').textContent = '待设置';
+            document.getElementById('textSongName').textContent = '待设置';
+            document.getElementById('textStyle').textContent = '待设置';
+
+            state.lyrics = [];
+            state.currentLyricIndex = 0;
+            updateLyricDisplay();
+
+            document.getElementById('lyricFile').value = '';
+            document.getElementById('lyricFileInfo').style.display = 'none';
+            document.getElementById('mediaFile').value = '';
+            document.getElementById('fileInfo').style.display = 'none';
+        });
+
+        document.documentElement.style.setProperty('--blur-radius', '20px');
+        resizeWaveformCanvas();
+        drawWaveform();
+    </script>
+</body>
+</html>

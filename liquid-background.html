@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>液态背景定制</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --accent-coral: #ff6b6b;
+            --accent-cyan: #4ecdc4;
+            --accent-yellow: #ffe66d;
+            --accent-purple: #a855f7;
+            --glass-bg: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.12);
+        }
+
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            min-height: 100vh;
+            overflow: hidden;
+            background: #1a1a2e;
+        }
+
+        .app {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Background Layer */
+        .bg-layer {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+        }
+
+        .bg-image {
+            position: absolute;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .bg-blur {
+            position: absolute;
+            inset: 0;
+            backdrop-filter: blur(var(--blur-radius, 20px));
+            -webkit-backdrop-filter: blur(var(--blur-radius, 20px));
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        /* Cards Container */
+        .cards-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 30px;
+            padding: 40px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .liquid-card {
+            width: 200px;
+            height: 280px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--blur-radius, 20px));
+            -webkit-backdrop-filter: blur(var(--blur-radius, 20px));
+            border-radius: 24px;
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            animation: liquidFloat 6s ease-in-out infinite;
+        }
+
+        .liquid-card:nth-child(2) { animation-delay: -2s; }
+        .liquid-card:nth-child(3) { animation-delay: -4s; }
+
+        @keyframes liquidFloat {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-18px) rotate(2deg); }
+        }
+
+        .liquid-card:nth-child(1) { transform: rotate(-4deg); animation-name: float1; }
+        .liquid-card:nth-child(2) { transform: rotate(3deg); animation-name: float2; }
+        .liquid-card:nth-child(3) { transform: rotate(-2deg); animation-name: float3; }
+
+        @keyframes float1 {
+            0%, 100% { transform: translateY(0) rotate(-4deg); }
+            50% { transform: translateY(-18px) rotate(-2deg); }
+        }
+        @keyframes float2 {
+            0%, 100% { transform: translateY(0) rotate(3deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        @keyframes float3 {
+            0%, 100% { transform: translateY(0) rotate(-2deg); }
+            50% { transform: translateY(-16px) rotate(0deg); }
+        }
+
+        .liquid-card:hover {
+            animation-play-state: paused;
+            transform: translateY(-20px) rotate(0deg) scale(1.03);
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .liquid-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(30px);
+            opacity: 0.6;
+        }
+
+        .liquid-card:nth-child(1) .liquid-blob {
+            width: 120px; height: 120px;
+            background: linear-gradient(135deg, var(--accent-coral), var(--accent-yellow));
+            top: -30px; right: -30px;
+        }
+        .liquid-card:nth-child(2) .liquid-blob {
+            width: 100px; height: 100px;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            bottom: -20px; left: -20px;
+        }
+        .liquid-card:nth-child(3) .liquid-blob {
+            width: 110px; height: 110px;
+            background: linear-gradient(135deg, var(--accent-yellow), var(--accent-coral));
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .liquid-card-content {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            padding: 24px;
+            background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);
+        }
+
+        .liquid-card-title {
+            width: 60%; height: 12px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 6px; margin-bottom: 12px;
+        }
+
+        .liquid-card-text {
+            width: 80%; height: 8px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            width: 320px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(255,255,255,0.1);
+            padding: 32px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+            position: relative;
+            z-index: 20;
+        }
+
+        .panel-title {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .panel-subtitle {
+            font-size: 13px;
+            color: rgba(255,255,255,0.5);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .control-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: rgba(255,255,255,0.6);
+        }
+
+        .upload-area {
+            width: 100%;
+            height: 120px;
+            border: 2px dashed rgba(255,255,255,0.2);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: rgba(255,255,255,0.03);
+        }
+
+        .upload-area:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(78, 205, 196, 0.1);
+        }
+
+        .upload-area.has-image {
+            border-style: solid;
+            border-color: var(--accent-cyan);
+        }
+
+        .upload-icon {
+            font-size: 28px;
+            opacity: 0.6;
+        }
+
+        .upload-text {
+            font-size: 13px;
+            color: rgba(255,255,255,0.5);
+        }
+
+        .upload-preview {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 14px;
+        }
+
+        #fileInput { display: none; }
+
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .slider-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            font-family: monospace;
+        }
+
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(78, 205, 196, 0.5);
+            transition: transform 0.2s;
+        }
+
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 10px rgba(78, 205, 196, 0.5);
+        }
+
+        .btn-reset {
+            padding: 14px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-reset:hover {
+            background: rgba(255,255,255,0.15);
+            transform: translateY(-2px);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app { flex-direction: column; }
+            .control-panel {
+                width: 100%;
+                height: auto;
+                border-left: none;
+                border-top: 1px solid rgba(255,255,255,0.1);
+            }
+            .cards-container { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Background Layer -->
+        <div class="bg-layer">
+            <div class="bg-image" id="bgImage"></div>
+            <div class="bg-blur" id="bgBlur"></div>
+        </div>
+
+        <!-- Cards -->
+        <div class="cards-container">
+            <div class="liquid-card">
+                <div class="liquid-blob"></div>
+                <div class="liquid-card-content">
+                    <div class="liquid-card-title"></div>
+                    <div class="liquid-card-text"></div>
+                </div>
+            </div>
+            <div class="liquid-card">
+                <div class="liquid-blob"></div>
+                <div class="liquid-card-content">
+                    <div class="liquid-card-title"></div>
+                    <div class="liquid-card-text"></div>
+                </div>
+            </div>
+            <div class="liquid-card">
+                <div class="liquid-blob"></div>
+                <div class="liquid-card-content">
+                    <div class="liquid-card-title"></div>
+                    <div class="liquid-card-text"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <div>
+                <h2 class="panel-title">背景定制</h2>
+                <p class="panel-subtitle">上传图片，调整模糊程度</p>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">上传背景</label>
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" accept="image/*">
+                    <span class="upload-icon">📁</span>
+                    <span class="upload-text">点击或拖拽上传图片</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="slider-container">
+                    <div class="slider-header">
+                        <label class="control-label">模糊程度</label>
+                        <span class="slider-value" id="blurValue">20px</span>
+                    </div>
+                    <input type="range" class="slider" id="blurSlider"
+                           min="0" max="100" value="20">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="slider-container">
+                    <div class="slider-header">
+                        <label class="control-label">遮罩透明度</label>
+                        <span class="slider-value" id="overlayValue">30%</span>
+                    </div>
+                    <input type="range" class="slider" id="overlaySlider"
+                           min="0" max="80" value="30">
+                </div>
+            </div>
+
+            <button class="btn-reset" id="resetBtn">
+                <span>↺</span>
+                <span>恢复默认</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const bgImage = document.getElementById('bgImage');
+        const bgBlur = document.getElementById('bgBlur');
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const blurSlider = document.getElementById('blurSlider');
+        const blurValue = document.getElementById('blurValue');
+        const overlaySlider = document.getElementById('overlaySlider');
+        const overlayValue = document.getElementById('overlayValue');
+        const resetBtn = document.getElementById('resetBtn');
+
+        // Upload handling
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = 'var(--accent-cyan)';
+            uploadArea.style.background = 'rgba(78, 205, 196, 0.1)';
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = 'rgba(255,255,255,0.2)';
+            uploadArea.style.background = 'rgba(255,255,255,0.03)';
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleFile(file);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleFile(file);
+        });
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                bgImage.style.backgroundImage = `url(${e.target.result})`;
+                uploadArea.classList.add('has-image');
+
+                // Replace upload UI with preview
+                uploadArea.innerHTML = `<img src="${e.target.result}" class="upload-preview">`;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Blur control
+        blurSlider.addEventListener('input', (e) => {
+            const value = e.target.value;
+            document.documentElement.style.setProperty('--blur-radius', `${value}px`);
+            blurValue.textContent = `${value}px`;
+        });
+
+        // Overlay control
+        overlaySlider.addEventListener('input', (e) => {
+            const value = e.target.value;
+            bgBlur.style.background = `rgba(0, 0, 0, ${value / 100})`;
+            overlayValue.textContent = `${value}%`;
+        });
+
+        // Reset
+        resetBtn.addEventListener('click', () => {
+            bgImage.style.backgroundImage = '';
+            uploadArea.classList.remove('has-image');
+            uploadArea.innerHTML = `
+                <span class="upload-icon">📁</span>
+                <span class="upload-text">点击或拖拽上传图片</span>
+            `;
+
+            blurSlider.value = 20;
+            overlaySlider.value = 30;
+            document.documentElement.style.setProperty('--blur-radius', '20px');
+            bgBlur.style.background = 'rgba(0, 0, 0, 0.3)';
+            blurValue.textContent = '20px';
+            overlayValue.textContent = '30%';
+
+            fileInput.value = '';
+        });
+
+        // Initial state
+        document.documentElement.style.setProperty('--blur-radius', '20px');
+    </script>
+</body>
+</html>
